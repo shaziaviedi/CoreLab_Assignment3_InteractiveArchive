@@ -1,0 +1,36 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1f2937;
+  background: #f9fafb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+h1 {
+  margin-bottom: 0.5rem;
+}
+
+p {
+  margin-top: 0;
+  color: #6b7280;
+}
