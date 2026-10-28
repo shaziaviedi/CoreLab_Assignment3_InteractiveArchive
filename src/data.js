@@ -1,0 +1,86 @@
+// counts from my own observations, not live pedestrian tracking
+
+export const OBS = {
+  afternoon: {
+    north: {
+      zone: "North Pool",
+      at: "1:32–1:37 PM",
+      crossings: 23,
+      stops: 67,
+      photographing: 40,
+      reading: 9,
+      observing: 6,
+      talking: 12,
+      other: 0,
+    },
+    tree: {
+      zone: "Survivor Tree",
+      at: "1:19–1:24 PM",
+      crossings: 15,
+      stops: 36,
+      photographing: 21,
+      reading: 3,
+      observing: 1,
+      talking: 11,
+      other: 0,
+    },
+    street: {
+      zone: "Greenwich Street",
+      at: "1:09–1:14 PM",
+      crossings: 53,
+      stops: 29,
+      photographing: 5,
+      reading: 0,
+      observing: 8,
+      talking: 16,
+      other: 0,
+    },
+  },
+  evening: {
+    north: {
+      zone: "North Pool",
+      at: "6:55–7:00 PM",
+      crossings: 23,
+      stops: 6,
+      photographing: 2,
+      reading: 2,
+      observing: 1,
+      talking: 1,
+      other: 0,
+    },
+    tree: {
+      zone: "Survivor Tree",
+      at: "6:41–6:46 PM",
+      crossings: 19,
+      stops: 5,
+      photographing: 3,
+      reading: 1,
+      observing: 0,
+      talking: 1,
+      other: 0,
+    },
+    street: {
+      zone: "Greenwich Street",
+      at: "6:27–6:32 PM",
+      crossings: 14,
+      stops: 7,
+      photographing: 1,
+      reading: 0,
+      observing: 1,
+      talking: 5,
+      other: 0,
+    },
+  },
+};
+export const FRAGMENTS = [
+  { id: "sun", label: "Sun", target: "sky" },
+  { id: "moon", label: "Moon", target: "sky" },
+  { id: "tree", label: "Tree", target: "tree" },
+  { id: "water", label: "Water", target: "north" },
+  { id: "street", label: "Street", target: "street" },
+];
+export const ZONENAMES = {
+  north: "North Pool",
+  tree: "Survivor Tree",
+  street: "Greenwich Street",
+};

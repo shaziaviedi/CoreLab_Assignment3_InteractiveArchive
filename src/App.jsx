@@ -1,7 +1,7 @@
 import React, {  useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from "three";
-import World3D from "./World3D.jsx";
+import World3D, { OVERVIEW } from "./World3D.jsx";
 import { OBS, FRAGMENTS, ZONENAMES } from "./data.js";
 
 const LABELS = {
@@ -22,7 +22,7 @@ const Icon = ({ name }) => {
 
   return (
     <svg
-      widht = "17"
+      width = "17"
       height = "17"
       viewBox = "0 0 24 24"
       stroke = "currentColor"
@@ -43,7 +43,6 @@ const empties = {
   street: "street", 
 };
 
-c = 
 function Slot({ id, placed, onPlace, selected, anchorRef }) {
   return (
     <button
@@ -134,19 +133,20 @@ const [placed, setPlaced] = useState({
     north: false,
     tree: false,
     street: false,
-  });c
+  });
   const [timeFrag, setTimeFrag] = useState(null);
   const [selected, setSelected] = useState(null);
   const [paused, setPaused] = useState(false);
   const [cameraZone, setCameraZone] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  constc [toast, setToast] = useState("");
+  const [toast, setToast] = useState("");
   const [flash, setFlash] = useState(false);
   const [help, setHelp] = useState(false);
   const glRef = useRef(null),
     toastTimer = useRef(null),
     overlays = useRef({});
+  // refs let the 3D scene move the HTML overlays as the camera moves
   const anchor = (key) => (el) => {
     if (el) overlays.current[key] = el;
     else delete overlays.current[key];
@@ -192,6 +192,7 @@ const [placed, setPlaced] = useState({
   function shutter() {
     let gl = glRef.current;
     if (!gl) return;
+    // grab the 3D canvas only; HTML controls stay out of the photo
     let url = gl.domElement.toDataURL("image/png");
     let d = OBS[period][cameraZone];
     setPhotos((old) => [
@@ -356,7 +357,7 @@ const [placed, setPlaced] = useState({
                     <img
                       src={
                         import.meta.env.BASE_URL +
-                        "fragments/" +
+                        "svg/" +
                         (f.target === "sky" ? f.id : f.target) +
                         ".svg"
                       }
