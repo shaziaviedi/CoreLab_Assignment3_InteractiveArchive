@@ -1,6 +1,7 @@
 import React, {  useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from "three";
+import FragmentArt from "./FragmentArt.jsx";
 import World3D, { OVERVIEW } from "./World3D.jsx";
 import { OBS, FRAGMENTS, ZONENAMES } from "./data.js";
 
@@ -12,11 +13,27 @@ const LABELS = {
 };
 
 const Icon = ({ name }) => {
+  if (name === "camera") return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 6 10 3h4l2 3h4a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"/>
+      <circle cx="12" cy="12.5" r="3.5"/>
+    </svg>
+  );
+  if (name === "puzzle") {
+    return (
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth=".8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 7H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-2a2 2 0 0 1 0-4h2V9a2 2 0 0 0-2-2h-3V5a3 3 0 0 0-6 0Z"
+          />
+      </svg>
+    );
+  }
   const paths = {
     pause: "M7 5h4v14H7zM15 5h4v14h-4z",
     play: "m7 4 13 8-13 8z",
     camera: "M4 7h3l2-3h6l2 3h3v12H4z M12 10a4 4 0 1 0 0 8a4 4 0 1 0 0-8",
     reset: "M3 12a9 9 0 1 0 3-7L3 8m0-5v5h5",
+    puzzle: "M9 3H4v6h2a2 2 0 1 1 0 4H4v7h6v-2a2 2 0 1 1 4 0v2h6v-7h-2a2 2 0 1 1 0-4h2V3h-6v2a2 2 0 1 1-4 0V3z",
     info: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 10v7M12 7v1",
   };
 
@@ -36,32 +53,23 @@ const Icon = ({ name }) => {
   );
 };
 
-const empties = {
-  sky: "day or night", 
-  north: "pool", 
-  tree: "tree",
-  street: "street", 
-};
-
 function Slot({ id, placed, onPlace, selected, anchorRef }) {
   return (
     <button
       ref = {anchorRef}
       className = {"slot " + id + (placed ? " filled" : "")}
-      title = {"Complete" + LABELS[id]}
+      title = {"Place fragment: " + LABELS[id]}
+      aria-label={"Place fragment: " + LABELS[id]}
+      onClick={() => onPlace(selected, id)}
       onDragOver = {(e) => e.preventDefault()}
       onDragEnter = {(e) => e.currentTarget.classList.add("dragover")}
       onDragLeave = {(e) => e.currentTarget.classList.remove("dragover")}
       onDrop = {(e) => {
         e.preventDefault();
         e.currentTarget.classList.remove("dragover");
-        onPlace(e.dataTransfer.getData("text/plain"), id);
+        onPlace(e.dataTransfer.getData("text/plain"), id, true);
       }}
     >
-      <span className="slot-icon">
-        {id === "sky" ? "☼" : id === "north" ? "≈" : id === "tree" ? "♧" : "⌁"}
-      </span>
-      <span className="slot-inner">{empties[id]}</span>
     </button>
   );
 }
@@ -71,6 +79,7 @@ function ZoneStats({ id, period, anchorRef }) {
   return(
     <div ref={anchorRef} className={"data-popup " + id} key={period + "-" + id}>
       <label>{ZONENAMES[id]} · 5 min</label>
+      <small className="data-summary">{d.summary}</small>
       <div className="data-numbers">
         <div>
           <strong>{d.crossings}</strong>
@@ -108,7 +117,7 @@ function Archive({ photos, onClose }){
               <img src={a.url} alt={"Visitor view of " + ZONENAMES[a.zone]} />
               <h3>{ZONENAMES[a.zone]}</h3>
               <p>
-                {a.period} · {a.stops} observed stops
+                {a.period === "afternoon" ? "Daytime" : "Evening"} · {a.pedestrians} pedestrians
               </p>
             </article>
           ))}
@@ -116,10 +125,6 @@ function Archive({ photos, onClose }){
       ) : (
         <p className="archive-empty">No moments captured yet.</p>
      )}
-           <div className="archive-sub">
-        A photograph preserves the moment of looking. What remains beyond its
-        frame?
-      </div>
       <button className="close-archive" onClick={onClose}>
         Return to the memorial
       </button>
@@ -127,7 +132,67 @@ function Archive({ photos, onClose }){
   );
 }
 
-export default function App(){
+export default function App() {
+  const [phase, setPhase] = useState("landing");
+  const sceneRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "entering") return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => {
+      setPhase("entered");
+      sceneRef.current?.focus({ preventScroll: true });
+    }, reducedMotion ? 3200 : 4800);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  return (
+    <div className={"experience-shell " + phase}>
+      <div className="experience-scene" ref={sceneRef} tabIndex={-1}
+        inert={phase !== "entered" ? "" : undefined}
+        aria-hidden={phase !== "entered"}>
+        <Experience preview={phase !== "entered"} />
+      </div>
+      {phase !== "entered" && (
+        <main className="landing">
+          <div className="landing-content">
+            <p className="landing-eyebrow">An interactive memorial study</p>
+            <h1>Elsewhere.</h1>
+            <p className="landing-description">
+              A place within the city, suspended in another rhythm.
+            </p>
+            <button className="landing-enter" disabled={phase === "entering"}
+              onClick={() => setPhase("entering")}>
+              Enter the experience <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </main>
+      )}
+      {phase === "entering" && (
+        <div className="arrival-copy" role="status">
+          <p>Where the city learns to pause.</p>
+          <span>drag fragments into the missing places</span>
+        </div>
+      )}
+      {phase === "entering" && (
+        <div className="arrival-sparkles" aria-hidden="true">
+          {Array.from({ length: 64 }, (_, i) => (
+            <i key={i} style={{
+              "--x": ((i * 37) % 100) + "%",
+              "--y": ((i * 61) % 100) + "%",
+              "--drift-x": (((i * 43) % 240) - 120) + "px",
+              "--drift-y": (((i * 29) % 240) - 120) + "px",
+              "--delay": ((i % 11) * 0.09) + "s",
+              "--size": (2 + i % 4) + "px",
+            }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Experience({ preview = false }){
 const [placed, setPlaced] = useState({
     sky: false,
     north: false,
@@ -138,11 +203,17 @@ const [placed, setPlaced] = useState({
   const [selected, setSelected] = useState(null);
   const [paused, setPaused] = useState(false);
   const [cameraZone, setCameraZone] = useState(null);
+  const [hoveredZone, setHoveredZone] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [flash, setFlash] = useState(false);
-  const [help, setHelp] = useState(false);
+  const [dockOpen, setDockOpen] = useState(false);
+  const [toastDuration, setToastDuration] = useState(3100);
+  const [toastKey, setToastKey] = useState(0);
+  const [guideActive, setGuideActive] = useState(false);
+  const guideTimer = useRef(null);
+  const frameRef = useRef(null);
   const glRef = useRef(null),
     toastTimer = useRef(null),
     overlays = useRef({});
@@ -152,13 +223,29 @@ const [placed, setPlaced] = useState({
     else delete overlays.current[key];
   };
   const period = timeFrag === "moon" ? "evening" : "afternoon";
-  const say = useCallback((message) => {
+  const say = useCallback((message, duration = 3100) => {
     setToast(message);
+    setToastDuration(duration);
+    setToastKey(key => key + 1);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(""), 3100);
+    toastTimer.current = setTimeout(() => setToast(""), duration);
   }, []);
+  useEffect(() => () => {
+    clearTimeout(guideTimer.current);
+    clearTimeout(toastTimer.current);
+  }, []);
+  function showInstructions() {
+    say("Drag a fragment into its silhouette, then click a camera to enter a visitor's viewpoint.", 7000);
+    setGuideActive(true);
+    clearTimeout(guideTimer.current);
+    guideTimer.current = setTimeout(() => setGuideActive(false), 7000);
+  }
   const place = useCallback(
-    (fragment, target) => {
+    (fragment, target, dropped = false) => {
+      if (target === "sky" && placed.sky && !dropped) {
+        say("Drag the sun or moon onto the sky to replace it.");
+        return;
+      }
       if (!fragment) {
         say("Choose a fragment from the lower tray.");
         return;
@@ -176,14 +263,15 @@ const [placed, setPlaced] = useState({
           ? fragment === "moon"
             ? "The evening enters the memorial."
             : "Afternoon light returns."
-          : LABELS[target] + " — observation layer revealed",
+          : LABELS[target] + ": observation layer revealed",
       );
     },
-    [say],
+    [say, placed.sky],
   );
   function choose(p) {
     if (p.target === "sky" && placed.sky) {
-      place(p.id, "sky");
+      setSelected(null);
+      say("Drag the sun or moon onto the sky to replace it.");
       return;
     }
     setSelected(p.id);
@@ -194,7 +282,20 @@ const [placed, setPlaced] = useState({
     if (!gl) return;
     // grab the 3D canvas only; HTML controls stay out of the photo
     let url = gl.domElement.toDataURL("image/png");
-    let d = OBS[period][cameraZone];
+    const { scene, camera } = frameRef.current;
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+    let pedestrians = 0;
+    const center = new THREE.Vector3();
+    scene.traverse((object) => {
+      if (!object.userData.pedestrian || !object.visible) return;
+      object.getWorldPosition(center);
+      center.y += .42;
+      if (frustum.containsPoint(center)) pedestrians++;
+    });
     setPhotos((old) => [
       ...old,
       {
@@ -202,8 +303,7 @@ const [placed, setPlaced] = useState({
         url,
         zone: cameraZone,
         period,
-        stops: d.stops,
-        crossings: d.crossings,
+        pedestrians,
       },
     ]);
     setFlash(true);
@@ -216,6 +316,7 @@ const [placed, setPlaced] = useState({
         setCameraZone(null);
         setArchiveOpen(false);
         setSelected(null);
+        setDockOpen(false);
       }
     }
     window.addEventListener("keydown", key);
@@ -236,14 +337,15 @@ const [placed, setPlaced] = useState({
             toneMappingExposure: 1.5,
           }}
           dpr={[1, 1.8]}
-          onCreated={({ gl }) => (glRef.current = gl)}
+          onCreated={({ gl, scene, camera }) => { glRef.current = gl; frameRef.current = { scene, camera }; }}
         >
           <World3D
             placed={placed}
             period={period}
-            paused={paused}
+            paused={preview || paused}
             cameraZone={cameraZone}
             overlays={overlays}
+            guideActive={guideActive}
           />
         </Canvas>
       </div>
@@ -252,20 +354,8 @@ const [placed, setPlaced] = useState({
       {!cameraZone && !archiveOpen && (
         <>
           <div className="corner-notation">
-            <b>E L S E W H E R E</b>
+            <b>Elsewhere.</b>
             <span>a different rhythm within the city</span>
-          </div>
-          <div className="status-pill">
-            <span className="dot" />
-            {placed.sky
-              ? period === "evening"
-                ? "EVENING · 6:30–7:00"
-                : "AFTERNOON · 1:00–1:40"
-              : "A MOMENT UNFINISHED"}
-          </div>
-          <div className="scene-caption">
-            Where the city learns to pause.
-            <small>drag fragments into the missing places</small>
           </div>
           {["sky", "north", "tree", "street"].map((id) => (
             <Slot
@@ -281,16 +371,20 @@ const [placed, setPlaced] = useState({
             .filter((id) => placed[id])
             .map((id) => (
               <React.Fragment key={id}>
-                <ZoneStats
+                {hoveredZone === id && <ZoneStats
                   id={id}
                   period={period}
                   anchorRef={anchor("stats:" + id)}
-                />
+                />}
                 <button
                   ref={anchor("pin:" + id)}
                   className={"pin " + id}
                   title={"Visit " + ZONENAMES[id]}
-                  onClick={() => setCameraZone(id)}
+                  onMouseEnter={() => setHoveredZone(id)}
+                  onMouseLeave={e => { if (document.activeElement !== e.currentTarget) setHoveredZone(null); }}
+                  onFocus={() => setHoveredZone(id)}
+                  onBlur={() => setHoveredZone(null)}
+                  onClick={() => { setHoveredZone(null); setCameraZone(id); }}
                 >
                   <Icon name="camera" />
                 </button>
@@ -324,15 +418,18 @@ const [placed, setPlaced] = useState({
             <button
               className="button-circle"
               title="How to explore"
-              onClick={() => setHelp((x) => !x)}
+              onClick={showInstructions}
             >
               <Icon name="info" />
             </button>
           </div>
-          <div className="fragment-dock">
-            <div className="dock-sub">
-              make the <b>moment</b> whole
-            </div>
+          <div className="scene-intro">
+            <nav className={"fragment-menu" + (dockOpen ? " is-open" : "") + (guideActive ? " is-guided" : "")} aria-label="Fragments">
+              <button className="puzzle-toggle" aria-label={dockOpen ? "Close fragments" : "Open fragments"}
+                aria-expanded={dockOpen} aria-controls="fragment-tray" onClick={() => setDockOpen(open => !open)}>
+                <Icon name="puzzle" />
+              </button>
+              <div className="fragment-dock" id="fragment-tray" aria-hidden={!dockOpen} inert={!dockOpen ? "" : undefined}>
             {FRAGMENTS.map((f, i) => (
               <React.Fragment key={f.id}>
                 {i === 2 && <div className="dock-divider" />}
@@ -349,25 +446,21 @@ const [placed, setPlaced] = useState({
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/plain", f.id);
                     e.dataTransfer.effectAllowed = "move";
+                    const card = e.currentTarget;
+                    e.dataTransfer.setDragImage(card, card.offsetWidth / 2, card.offsetHeight / 2);
                   }}
                   onClick={() => choose(f)}
                   title={"Place " + f.label}
                 >
                   <span className="fragment-art">
-                    <img
-                      src={
-                        import.meta.env.BASE_URL +
-                        "svg/" +
-                        (f.target === "sky" ? f.id : f.target) +
-                        ".svg"
-                      }
-                      alt={f.label + " fragment"}
-                    />
+                    <FragmentArt fragment={f} />
                   </span>
                   <span className="piece-label">{f.label}</span>
                 </button>
               </React.Fragment>
             ))}
+              </div>
+            </nav>
           </div>
           {photos.length > 0 && (
             <button
@@ -381,12 +474,6 @@ const [placed, setPlaced] = useState({
               />
               captured moments · {photos.length}
             </button>
-          )}
-          {help && (
-            <div className="nudge" onClick={() => setHelp(false)}>
-              Drag a fragment into its silhouette, then click a camera to enter
-              a visitor's viewpoint.
-            </div>
           )}
         </>
       )}
@@ -419,11 +506,9 @@ const [placed, setPlaced] = useState({
       {archiveOpen && (
         <Archive photos={photos} onClose={() => setArchiveOpen(false)} />
       )}
-      {toast && <div className="nudge">{toast}</div>}
+      {toast && <div key={toastKey} className="nudge" role="status" style={{"--toast-duration": toastDuration + "ms"}}>{toast}</div>}
       {flash && <div className="screen-flash" />}
-      <div className="mark-water">
-        A STUDY IN MOTION, STILLNESS & REMEMBRANCE
-      </div>
+
     </main>
   );
 

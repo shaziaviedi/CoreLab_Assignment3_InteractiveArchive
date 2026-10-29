@@ -1,82 +1,35 @@
-// counts from my own observations, not live pedestrian tracking
+import observationDays from "./observations.json";
+
+const fields = ["crossings", "stops", "photographing", "reading", "observing", "talking", "other"];
+const zones = {north: "North Pool", tree: "Survivor Tree", street: "Greenwich Street"};
+
+function observationsFor(period) {
+  const visits = observationDays.filter(day => day.period === period);
+  return Object.fromEntries(Object.entries(zones).map(([id, zone]) => {
+    const rows = visits.map(day => day.observations[id]);
+    // round the equal five-minute visits to whole people
+    const counts = Object.fromEntries(fields.map(field => [field,
+      Math.round(rows.reduce((sum, row) => sum + row[field], 0) / rows.length),
+    ]));
+    return [id, {
+      zone, ...counts, durationMinutes: 5, sampleCount: visits.length,
+      summary: visits.length > 1 ? "Daytime average · 2 visits" : "Evening observation",
+      at: rows.map(row => row.start + "–" + row.end).join(" / "),
+      dates: rows.map(row => row.date),
+    }];
+  }));
+}
 
 export const OBS = {
-  afternoon: {
-    north: {
-      zone: "North Pool",
-      at: "1:32–1:37 PM",
-      crossings: 23,
-      stops: 67,
-      photographing: 40,
-      reading: 9,
-      observing: 6,
-      talking: 12,
-      other: 0,
-    },
-    tree: {
-      zone: "Survivor Tree",
-      at: "1:19–1:24 PM",
-      crossings: 15,
-      stops: 36,
-      photographing: 21,
-      reading: 3,
-      observing: 1,
-      talking: 11,
-      other: 0,
-    },
-    street: {
-      zone: "Greenwich Street",
-      at: "1:09–1:14 PM",
-      crossings: 53,
-      stops: 29,
-      photographing: 5,
-      reading: 0,
-      observing: 8,
-      talking: 16,
-      other: 0,
-    },
-  },
-  evening: {
-    north: {
-      zone: "North Pool",
-      at: "6:55–7:00 PM",
-      crossings: 23,
-      stops: 6,
-      photographing: 2,
-      reading: 2,
-      observing: 1,
-      talking: 1,
-      other: 0,
-    },
-    tree: {
-      zone: "Survivor Tree",
-      at: "6:41–6:46 PM",
-      crossings: 19,
-      stops: 5,
-      photographing: 3,
-      reading: 1,
-      observing: 0,
-      talking: 1,
-      other: 0,
-    },
-    street: {
-      zone: "Greenwich Street",
-      at: "6:27–6:32 PM",
-      crossings: 14,
-      stops: 7,
-      photographing: 1,
-      reading: 0,
-      observing: 1,
-      talking: 5,
-      other: 0,
-    },
-  },
+  afternoon: observationsFor("afternoon"),
+  evening: observationsFor("evening"),
 };
+
 export const FRAGMENTS = [
   { id: "sun", label: "Sun", target: "sky" },
   { id: "moon", label: "Moon", target: "sky" },
   { id: "tree", label: "Tree", target: "tree" },
-  { id: "water", label: "Water", target: "north" },
+  { id: "water", label: "Pool", target: "north" },
   { id: "street", label: "Street", target: "street" },
 ];
 export const ZONENAMES = {

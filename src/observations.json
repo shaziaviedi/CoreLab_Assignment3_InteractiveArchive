@@ -1,0 +1,152 @@
+[
+  {
+    "day": 1,
+    "period": "afternoon",
+    "sourceFile": "Core Studio Sys._City as System_Observational Research 9_11 Memorial - Day 1.csv",
+    "durationMinutes": 5,
+    "observations": {
+      "north": {
+        "zone": "North Pool",
+        "date": "Oct. 12, 2026",
+        "start": "1:32 PM",
+        "end": "1:37 PM",
+        "sourceRow": 3,
+        "crossings": 23,
+        "stops": 67,
+        "photographing": 40,
+        "reading": 9,
+        "observing": 6,
+        "talking": 12,
+        "other": 0
+      },
+      "tree": {
+        "zone": "Tree-lined plaza",
+        "date": "Oct. 12, 2026",
+        "start": "1:19 PM",
+        "end": "1:24 PM",
+        "sourceRow": 4,
+        "crossings": 15,
+        "stops": 36,
+        "photographing": 21,
+        "reading": 3,
+        "observing": 1,
+        "talking": 11,
+        "other": 0
+      },
+      "street": {
+        "zone": "Greenwich Street by Oculus",
+        "date": "Oct. 12, 2026",
+        "start": "1:09 PM",
+        "end": "1:14 PM",
+        "sourceRow": 5,
+        "crossings": 53,
+        "stops": 29,
+        "photographing": 5,
+        "reading": 0,
+        "observing": 8,
+        "talking": 16,
+        "other": 0
+      }
+    }
+  },
+  {
+    "day": 2,
+    "period": "evening",
+    "sourceFile": "Core Studio Sys._City as System_Observational Research 9_11 Memorial - Day 2.csv",
+    "durationMinutes": 5,
+    "observations": {
+      "north": {
+        "zone": "North Pool",
+        "date": "Oct. 13, 2026",
+        "start": "6:55 PM",
+        "end": "7:00 PM",
+        "sourceRow": 3,
+        "crossings": 23,
+        "stops": 6,
+        "photographing": 2,
+        "reading": 2,
+        "observing": 1,
+        "talking": 1,
+        "other": 0
+      },
+      "tree": {
+        "zone": "Tree-lined plaza",
+        "date": "Oct. 13, 2026",
+        "start": "6:41 PM",
+        "end": "6:46 PM",
+        "sourceRow": 4,
+        "crossings": 19,
+        "stops": 5,
+        "photographing": 3,
+        "reading": 1,
+        "observing": 0,
+        "talking": 1,
+        "other": 0
+      },
+      "street": {
+        "zone": "Greenwich Street by Oculus",
+        "date": "Oct. 13, 2026",
+        "start": "6:27 PM",
+        "end": "6:32 PM",
+        "sourceRow": 5,
+        "crossings": 14,
+        "stops": 7,
+        "photographing": 1,
+        "reading": 0,
+        "observing": 1,
+        "talking": 5,
+        "other": 0
+      }
+    }
+  },
+  {
+    "day": 3,
+    "period": "afternoon",
+    "sourceFile": "Core Studio Sys._City as System_Observational Research 9_11 Memorial - Day 3.csv",
+    "durationMinutes": 5,
+    "observations": {
+      "north": {
+        "zone": "North Pool",
+        "date": "Oct. 14, 2026",
+        "start": "2:28 PM",
+        "end": "2:33 PM",
+        "sourceRow": 3,
+        "crossings": 28,
+        "stops": 54,
+        "photographing": 30,
+        "reading": 8,
+        "observing": 7,
+        "talking": 9,
+        "other": 0
+      },
+      "tree": {
+        "zone": "Tree-lined plaza",
+        "date": "Oct. 14, 2026",
+        "start": "2:40 PM",
+        "end": "2:45 PM",
+        "sourceRow": 4,
+        "crossings": 22,
+        "stops": 18,
+        "photographing": 9,
+        "reading": 2,
+        "observing": 2,
+        "talking": 5,
+        "other": 0
+      },
+      "street": {
+        "zone": "Greenwich Street by Oculus",
+        "date": "Oct. 14, 2026",
+        "start": "2:52 PM",
+        "end": "2:57 PM",
+        "sourceRow": 5,
+        "crossings": 47,
+        "stops": 21,
+        "photographing": 3,
+        "reading": 0,
+        "observing": 4,
+        "talking": 14,
+        "other": 0
+      }
+    }
+  }
+]

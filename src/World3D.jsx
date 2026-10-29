@@ -1,7 +1,16 @@
-import React, { useMemo, useRef, useEffect } from "react";
+import React, { Suspense, useMemo, useRef, useEffect } from "react";
 import * as THREE from "three";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import AtmosphericHaze, { skyColors, useSkyHorizon } from "./AtmosphericHaze.jsx";
+import AnimatedVisitor from "./AnimatedVisitor.jsx";
+import { pedestrianRoute, stoppedPositions } from "./PedestrianPaths.js";
+import ParkLawns from "./ParkLawns.jsx";
+import { UploadedOculus, UploadedSkyline } from "./UploadedArchitecture.jsx";
+import { PastelSun, MoonGlow, moonVertex, moonFragment } from "./CelestialModels.jsx";
+import ReferencePool from "./ReferencePool.jsx";
+import ReferenceMuseum from "./ReferenceMuseum.jsx";
+import TexturedTree from "./TexturedTree.jsx";
 import { OBS } from "./data.js";
 
 const PI = Math.PI,
@@ -12,34 +21,34 @@ const hash = (x) => {
   return v - Math.floor(v);
 };
 
-export const OVERVIEW = { pos: [16, 22, 31], target: [0, 0, 0] };
-const NORTH_POOL = [-8, 0.03, 1];
-const SOUTH_POOL = [-3.5, 0.03, 8.5];
-const SURVIVOR_TREE = [2, 0, -0.5];
-const STREET_X = 9;
-const CROSSWALK_Z = -2;
-const OCULUS = [15.5, 0.05, 0];
-// keep sun/moon in the same screen spot; coords here are NDC, not world coords
+// map layout: north is -z, Greenwich is east (+x)
+export const OVERVIEW = { pos: [-11.5, 37, 55], target: [2, 8, -1] };
+// pool centres + pavilion transform measured from memorial-park-ref.glb
+const NORTH_POOL = [-6.42, 0.03, -9.93];
+const SOUTH_POOL = [6.41, 0.03, 9.92];
+const SURVIVOR_TREE = [-3, 0, 9.92];
+const STREET_X = 16.5;
+const CROSSWALK_Z = 1;
+const OCULUS = [27.6, 0.05, -8];
 const SKY_NDC = [0.42, 0.66];
 const SKY_DISTANCE = 60;
+// fixed world location: camera movement must not drag the celestial bodies along
+const CELESTIAL_TOP = (() => {
+  const camera=new THREE.PerspectiveCamera(42,1.8,.1,280);
+  camera.position.set(...OVERVIEW.pos);camera.lookAt(...OVERVIEW.target);camera.updateMatrixWorld();
+  return new THREE.Vector3(SKY_NDC[0],SKY_NDC[1],.5).unproject(camera)
+    .sub(camera.position).normalize().multiplyScalar(SKY_DISTANCE).add(camera.position);
+})();
 
-// 3D points for the HTML slots, camera pins + stats to follow
 const ANCHORS = {
-  north: { at: [-8, 0.5, 1], card: "left", cardAt: [-11.2, 0.5, 1] },
-  tree: { at: [2, 4.4, -0.5], card: "above", cardAt: [2, 6.6, -0.5] },
-  street: { at: [STREET_X, 0.1, CROSSWALK_Z], card: "right" },
+  north: { at: [NORTH_POOL[0], 0.5, NORTH_POOL[2]], pin: [NORTH_POOL[0], .1, NORTH_POOL[2] + 8], card: "left" },
+  tree: { at: [SURVIVOR_TREE[0], 4.4, SURVIVOR_TREE[2]], pin: [SURVIVOR_TREE[0], .1, SURVIVOR_TREE[2] + 2], card: "above" },
+  street: { at: [STREET_X, 0.1, CROSSWALK_Z], pin: [STREET_X, .1, CROSSWALK_Z + 3.5], card: "right" },
 };
-
-const ROUTES = {
-  north: { a: [-4.3, -3.5], b: [-4.3, 4.6] },
-  tree: { a: [3.6, -4.5], b: [3.6, 3.6] },
-  street: { a: [5.6, CROSSWALK_Z], b: [12.4, CROSSWALK_Z] },
-};
-
 const CAMERA_PRESETS = {
-  north: { pos: [1.8, 2.7, -4.2], target: [-8, 0, 1] },
-  tree: { pos: [6.3, 1.7, 10], target: [2, 3, -0.5] },
-  street: { pos: [10.5, 1.75, 7.5], target: [8.6, 0.9, -5] },
+  north: { pos: [1, 2.7, -2], target: [-6.42, 0, -9.93] },
+  tree: { pos: [-7, 2.1, 16], target: [-3, 2.6, 9.92] },
+  street: { pos: [18, 1.75, 9], target: [16.5, .9, -6] },
 };
 
 const inBox = (x, z, c, r) => Math.abs(x - c[0]) < r && Math.abs(z - c[2]) < r;
@@ -54,49 +63,87 @@ function nearSightline(x, z, { pos, target }) {
   return Math.hypot(x - pos[0] - t * dx, z - pos[2] - t * dz) < 2.2;
 }
 function inClearing(x, z) {
-  return (
-    x > 4.6 ||
-    (z > 5.5 && x > -9.5) ||
-    (x > -5.5 && z > -3.2) ||
-    inBox(x, z, NORTH_POOL, 4.7) ||
-    inBox(x, z, SOUTH_POOL, 4.7) ||
-    Math.hypot(x - SURVIVOR_TREE[0], z - SURVIVOR_TREE[2]) < 3.6 ||
-    (Math.abs(x - ROUTES.north.a[0]) < 1.4 && z > -5 && z < 5.6) ||
-    (Math.abs(x - ROUTES.tree.a[0]) < 1.5 && z > -6 && z < 5) ||
-    Object.values(CAMERA_PRESETS).some((p) => nearSightline(x, z, p))
-  );
+  return x > 13 ||
+    inBox(x, z, NORTH_POOL, 7.6) || inBox(x, z, SOUTH_POOL, 7.6) ||
+    (x > 0 && x < 14 && z > -8 && z < 2) ||
+    Math.hypot(x - SURVIVOR_TREE[0], z - SURVIVOR_TREE[2]) < 3 ||
+    Object.values(CAMERA_PRESETS).some((p) => nearSightline(x, z, p));
 }
 const GROVE = [];
-for (let row = 0; row < 8; row++)
+for (let row = 0; row < 9; row++)
   for (let col = 0; col < 8; col++) {
-    const x = -17 + col * 3.2 + (row % 2) * 1.6,
-      z = -13 + row * 3.2;
+    const x = -18 + col * 3.1, z = -17 + row * 3.6;
     if (!inClearing(x, z)) GROVE.push([x, z]);
   }
-const skyVert = `varying vec3 vDir; void main(){vDir=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
+// spread new trees around the park edges rather than packing the existing grove
+const extraPlanting = [
+  [-14, -20], [3, -20], [10.4, -15.8],
+  [7.5, -13], [11.5, -9],
+  [-12, 19.5], [-4, 19.5], [4, 19], [11, 19],
+];
+for (const [x, z] of extraPlanting) {
+  if (!inClearing(x, z) && GROVE.every(([gx, gz]) => Math.hypot(gx - x, gz - z) > 4.2)) {
+    GROVE.push([x, z]);
+  }
+}
+// a continuous row anchors the northern lawn instead of one isolated tree
+for (const x of [-10, -6.4, -2.8]) {
+  GROVE.push([x, -18.85]);
+}
+// low planting stays on the lawn beds, away from the Survivor Tree's paving
+const BUSHES = [
+  [-10.5,-19.7], [-6.8,-19.7], [-2,-19.7],
+  [-17.5,-13], [-15,-6], [-16,3], [-16,10], [-15,14.5],
+  [-10,-.5], [-5.2,.8], [-9.8,5.5], [-9.5,14],
+  [3.3,-14], [3.3,-9.5], [8.5,-15.8], [10.8,-12.5],
+  [-1.4,1.8], [2,18.6], [5,19.3], [8.4,18.5], [11,19.4],
+  [-18,-16], [-15,-15], [-18,-8], [-14.4,-3.4],
+  [-17,6.5], [-14.5,8], [-17,13.5], [-15.5,16],
+  [-10.8,1], [-7.5,.7], [-10,8.5], [-7.3,12.5], [-10.2,16],
+  [-9,-19.7], [-4.5,-19.7], [-1.8,-18],
+  [2.7,-11.7], [4.2,-15], [7.4,-10], [9.5,-9.2], [11,-16],
+  [-2,2.8], [-11,19.8], [-7.5,19.8], [-3,19.7],
+  [3.6,18.2], [8.2,19.7], [10.7,18.3],
+];
+// Match the planted positions, including their seeded offsets and model scale.
+const PEDESTRIAN_OBSTACLES = [
+  ...GROVE.map(([x,z],i) => ({x:x+(hash(i*5)-.5)*.5,z:z+(hash(i*7)-.5)*.5,radius:.65})),
+  ...BUSHES.map(([x,z],i) => ({x,z,radius:[1.01,1.69,1.44,.98][i%4]*(.85+hash(i+27)*.3)+.3})),
+  {x:SURVIVOR_TREE[0],z:SURVIVOR_TREE[2],radius:.85},
+  // Uploaded Oculus is normalized to 14 x 12; include shoulder clearance.
+  {box:true,x:OCULUS[0],z:OCULUS[2],hx:7.35,hz:6.35},
+];
+const skyVert = `varying vec2 vSkyUv;
+void main(){vSkyUv=uv;gl_Position=vec4(position.xy,1.,1.);}`;
 const skyFrag = `precision highp float;
-varying vec3 vDir;uniform float uNight;uniform float uTime;
-float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
-float noise2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);}
-float fbm(vec2 p){float v=0.,a=.52;for(int i=0;i<5;i++){v+=a*noise2(p);p=p*2.12+vec2(14.,5.);a*=.47;}return v;}
-void main(){vec3 d=normalize(vDir);float horizon=clamp(d.y*.5+.5,0.,1.);float n=uNight;
-vec3 high=mix(vec3(.26,.65,.82),vec3(.085,.098,.30),n);
-vec3 mid=mix(vec3(.79,.57,.85),vec3(.26,.24,.52),n);
-vec3 low=mix(vec3(1.,.70,.67),vec3(.55,.37,.70),n);
-vec3 color=mix(low,mid,smoothstep(.38,.70,horizon));color=mix(color,high,smoothstep(.61,.98,horizon));
-vec2 p=d.xz/(d.y+.95);p*=1.55;float cloud=fbm(p*1.2+vec2(uTime*.006,2.));float fine=fbm(p*2.8+vec2(uTime*.004,11.));
-float cf=smoothstep(.36,.70,cloud+.17*fine);
-color=mix(color,mix(vec3(1.,.85,.95),vec3(.56,.52,.79),n),cf*.32);
-color+=vec3(.15,.09,.12)*exp(-pow((horizon-.52)/.16,2.));
-float star=step(.9983,hash21(floor(p*130.)))*smoothstep(.4,1.,horizon)*n;
-color+=vec3(1.,.93,.79)*star*.7;
-gl_FragColor=vec4(color,1.);}`;
+varying vec2 vSkyUv;
+uniform float uNight;uniform float uDay;uniform float uTime;
+uniform vec2 uSkySize;
+${skyColors}
+float starHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+void main(){
+  vec3 color=skyColor(vSkyUv,uDay,uNight);
+  vec2 grid=vSkyUv*uSkySize/48.;
+  vec2 cell=floor(grid);
+  float seed=starHash(cell);
+  vec2 center=vec2(.2)+vec2(starHash(cell+17.),starHash(cell+41.))*.6;
+  vec2 p=(fract(grid)-center)*48.;
+  float twinkle=.55+.45*sin(uTime*(.65+seed)+seed*63.);
+  float core=exp(-dot(p,p)/(seed>.96 ? 2.2 : .65));
+  float glow=exp(-dot(p,p)/18.)*.12;
+  float cross=exp(-abs(p.x)*4.-abs(p.y)*.3)+exp(-abs(p.y)*4.-abs(p.x)*.3);
+  float skyOnly=smoothstep(skyEdge(vSkyUv.x)+.015,skyEdge(vSkyUv.x)+.05,vSkyUv.y);
+  float stars=step(.86,seed)*(core*.35+glow+cross*.5)*twinkle*uNight*skyOnly;
+  color+=mix(vec3(.65,.76,1.),vec3(1.,.92,.74),seed)*stars*.7;
+  gl_FragColor=vec4(color,1.);
+}`;
 const waterVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
-const waterFrag = `precision highp float; varying vec2 vUv;uniform float uTime;uniform float uNight;
+const waterFrag = `precision highp float; varying vec2 vUv;uniform float uTime;uniform float uNight;uniform float uDay;
 float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
 float n2(vec2 x){vec2 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);}
 void main(){vec2 uv=vUv;float ripple=sin((uv.x+uv.y)*35.-uTime*.93)*.017+sin(uv.x*95.+uTime*.43)*.009;
 float waves=n2(uv*22.+uTime*.07);vec3 dark=mix(vec3(.020,.075,.12),vec3(.015,.047,.08),uNight);
+dark=mix(dark,vec3(.035,.16,.22),uDay);
 float brightness=clamp(waves*.10+ripple+.022,0.,1.);vec3 color=dark+vec3(.27,.45,.54)*brightness;
 float foam=max(smoothstep(.95,1.,uv.x),smoothstep(.95,1.,uv.y))*0.18;
 color+=vec3(.33,.55,.67)*foam;gl_FragColor=vec4(color,1.);}`;
@@ -108,25 +155,30 @@ float foam=sin(vUv.y*90.-uTime*13.+hash(floor(vUv.x*65.))*6.28)*.5+.5;
 float a=.2+.35*pow(streak,5.)+.13*foam;
 vec3 c=mix(vec3(.56,.82,.94),vec3(.58,.67,.95),uNight);gl_FragColor=vec4(c,a);}`;
 
-function Sky({ blend }) {
+function Sky({ blend, daylight }) {
+  const horizon = useSkyHorizon();
   const ref = useRef();
   const uniforms = useMemo(
-    () => ({ uNight: { value: 0 }, uTime: { value: 0 } }),
-    [],
+    () => ({ skyHorizon: { value: horizon }, uNight: { value: 0 }, uDay: { value: 0 }, uTime: { value: 0 }, uSkySize: { value: new THREE.Vector2(1, 1) } }),
+    [horizon],
   );
-  useFrame(({ clock }) => {
+  useFrame(({ clock, size }) => {
     if (ref.current) {
+      ref.current.uniforms.uSkySize.value.set(size.width, size.height);
       ref.current.uniforms.uNight.value = blend.current;
+      ref.current.uniforms.uDay.value = daylight.current;
       ref.current.uniforms.uTime.value = clock.elapsedTime;
     }
   });
   return (
-    <mesh renderOrder={-1000}>
-      <sphereGeometry args={[120, 64, 32]} />
+    <mesh renderOrder={-1000} frustumCulled={false}>
+      <planeGeometry args={[2, 2]} />
       <shaderMaterial
         ref={ref}
-        side={THREE.BackSide}
+        depthTest={false}
         depthWrite={false}
+        blending={THREE.NoBlending}
+        toneMapped={false}
         uniforms={uniforms}
         vertexShader={skyVert}
         fragmentShader={skyFrag}
@@ -134,48 +186,109 @@ function Sky({ blend }) {
     </mesh>
   );
 }
-function skyPoint(camera, ndcY, out) {
-  return out
-    .set(SKY_NDC[0], ndcY, 0.5)
-    .unproject(camera)
-    .sub(camera.position)
-    .normalize()
-    .multiplyScalar(SKY_DISTANCE)
-    .add(camera.position);
-}
-function SunMoon({ placed, night, blend }) {
+function SunMoon({ placed, night, blend, guideActive, guidancePulse, celestial }) {
   let sun = useRef(),
     moon = useRef();
   const { camera } = useThree();
   useFrame(() => {
-    const b = blend.current,
-      high = SKY_NDC[1],
-      low = SKY_NDC[1] - 0.6;
-    skyPoint(camera, lerp(high, low, b), sun.current.position);
-    sun.current.visible = placed && b < 0.97;
-    skyPoint(camera, lerp(low, high, b), moon.current.position);
-    moon.current.visible = placed && b > 0.03;
+    const state=celestial.current;
+    sun.current.position.copy(CELESTIAL_TOP);
+    sun.current.position.y -= 45 * (1-state.sun);
+    sun.current.visible=!placed || state.sun>.005;
+    sun.current.quaternion.copy(camera.quaternion);
+    moon.current.position.copy(CELESTIAL_TOP);
+    moon.current.position.y -= 45 * (1-state.moon);
+    moon.current.quaternion.copy(camera.quaternion);
+    moon.current.visible=placed && state.moon>.005;
+    const fade = guideActive ? 1 - guidancePulse.current * .85 : 1;
+    sun.current.traverse(node => {
+      if (node.isMesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => {
+        const opacity = (placed ? 1 : .24) * fade;
+        if (material.uniforms?.sunOpacity) material.uniforms.sunOpacity.value = opacity;
+        else material.opacity = opacity;
+      });
+    });
+    moon.current.traverse(node => {
+      if(node.isMesh && node.material.uniforms?.moonOpacity) node.material.uniforms.moonOpacity.value=fade;
+    });
   });
   return (
     <group>
-      <mesh ref={sun}>
-        <sphereGeometry args={[2.3, 48, 32]} />
-        <meshBasicMaterial color={[1.55, 1.3, 0.95]} toneMapped={false} fog={false} />
-      </mesh>
-      <mesh ref={moon}>
+      <group ref={sun}>
+        {placed ? <PastelSun placed /> : (
+          <mesh>
+            <sphereGeometry args={[2.3, 48, 32]} />
+            <meshBasicMaterial color="#c7c0d3" transparent opacity={.24} depthWrite={false} toneMapped={false} side={THREE.FrontSide} />
+          </mesh>
+        )}
+      </group>
+      <group ref={moon}>
+        <MoonGlow />
+        <mesh>
         <sphereGeometry args={[1.7, 48, 32]} />
-        <meshBasicMaterial color={[1.2, 1.25, 1.55]} toneMapped={false} fog={false} />
-      </mesh>
+        <shaderMaterial vertexShader={moonVertex} fragmentShader={moonFragment}
+          uniforms={{moonOpacity: {value: 1}}} transparent depthWrite={false} toneMapped={false} />
+        </mesh>
+      </group>
       <pointLight
         position={[12, 14, -3]}
-        intensity={6}
+        intensity={placed ? 6 : 0}
         distance={56}
         color={night ? "#c1c6ff" : "#ffe3c9"}
       />
     </group>
   );
 }
-function Ground() {
+function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
+  const crosswalkMaterials = useRef([]);
+  const streetMaterial = useRef(null);
+  const laneMaterials = useRef({});
+  useFrame(() => {
+    const fade = guideActive ? 1 - guidancePulse.current * .85 : 1;
+    if (streetMaterial.current) streetMaterial.current.opacity = streetPlaced ? 1 : .32 * fade;
+    Object.values(laneMaterials.current).forEach(material => {
+      if (material) material.opacity = streetPlaced ? .4 : .32 * fade;
+    });
+    crosswalkMaterials.current.forEach(material => {
+      if (material) material.opacity = streetPlaced ? .85 : guideActive ? .32 * (1 - guidancePulse.current * .85) : .32;
+    });
+  });
+  const streets = useMemo(() => [STREET_X, -25].map((center) => {
+    const halfWidth = center === STREET_X ? 3 : 2.5;
+    const shape = new THREE.Shape();
+    shape.moveTo(center - halfWidth, -85);
+    shape.lineTo(center + halfWidth, -85);
+    // follow the curved city edge so the roads don't stop halfway across the plaza
+    for (let i = 0; i <= 20; i++) {
+      const x = center + halfWidth - i / 20 * halfWidth * 2;
+      shape.lineTo(x, 2 + Math.sqrt(48 * 48 - x * x));
+    }
+    shape.closePath();
+    return shape;
+  }), []);
+  const plaza = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-65, -85);
+    shape.lineTo(65, -85);
+    shape.lineTo(48, 2);
+    shape.absarc(0, 2, 48, 0, Math.PI, false);
+    shape.closePath();
+    // openings let the imported basins sit below the paving instead of getting covered
+    for (const [x, , z] of [NORTH_POOL, SOUTH_POOL]) {
+      const hole = new THREE.Path();
+      const edge = [
+        [-5.5, -5.04], [-5.19, -5.35], [5.19, -5.35], [5.5, -5.04],
+        [5.5, 5.04], [5.19, 5.35], [-5.19, 5.35], [-5.5, 5.04],
+      ];
+      edge.forEach(([dx, dz], i) => {
+        if (i === 0) hole.moveTo(x + dx, -z + dz);
+        else hole.lineTo(x + dx, -z + dz);
+      });
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+    return shape;
+  }, []);
   const tex = useMemo(() => {
     let canvas = document.createElement("canvas");
     canvas.width = 512;
@@ -204,48 +317,62 @@ function Ground() {
     }
     const t = new THREE.CanvasTexture(canvas);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(27, 27);
+    t.repeat.set(.45, .45);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }, []);
   return (
     <group>
       <mesh rotation={[-PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[400, 400]} />
-        <meshStandardMaterial map={tex} color="#f4ebf7" roughness={0.98} />
+        {/* finite plaza so the ground doesn’t cover the sky */}
+        <shapeGeometry args={[plaza, 64]} />
+        <meshStandardMaterial map={tex} color={sunny ? "#f2e5ef" : "#f4ebf7"} roughness={0.98} />
       </mesh>
-      <mesh
-        rotation={[-PI / 2, 0, 0]}
-        position={[STREET_X, 0.02, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[6, 170]} />
-        <meshStandardMaterial color="#9699b4" roughness={0.96} />
+      <ParkLawns sunny={sunny} />
+      {streets.map((shape, i) => (
+        <mesh key={i} rotation={[-PI / 2, 0, 0]} position={[0, .035, 0]} receiveShadow>
+          <shapeGeometry args={[shape]} />
+          <meshStandardMaterial ref={i === 0 ? streetMaterial : undefined}
+            color={sunny ? "#9baab7" : "#899eaf"} roughness={.96}
+            transparent={i === 0} opacity={i === 0 && !streetPlaced ? .32 : 1}
+            depthWrite={i !== 0 || streetPlaced} />
+        </mesh>
+      ))}
+      <mesh rotation={[-PI / 2, 0, 0]} position={[0, .04, 23]} receiveShadow>
+        <planeGeometry args={[80, 5]} />
+        <meshStandardMaterial color={sunny ? "#9baab7" : "#899eaf"} roughness={.96} />
       </mesh>
-      {Array.from({ length: 21 }, (_, i) => -64 + i * 6)
-        .filter((z) => Math.abs(z - CROSSWALK_Z) > 2.5)
+      {Array.from({length: 13}, (_, i) => -36 + i * 6)
+        .filter(x => Math.abs(x - STREET_X) > 4 && Math.abs(x + 25) > 3.5)
+        .map(x => <mesh key={x} rotation={[-PI / 2, 0, 0]} position={[x, .05, 23]}>
+          <planeGeometry args={[2.1, .09]} />
+          <meshBasicMaterial color="#efedf2" transparent opacity={.4} />
+        </mesh>)}
+      {Array.from({ length: 22 }, (_, i) => -40 + i * 6)
+        .filter((z) => Math.abs(z - CROSSWALK_Z) > 2.5 && Math.abs(z - 23) > 3)
         .map((z) => (
           <mesh
             key={z}
             rotation={[-PI / 2, 0, 0]}
-            position={[STREET_X, 0.028, z]}
+            position={[STREET_X, 0.05, z]}
           >
             <planeGeometry args={[0.09, 2.1]} />
-            <meshBasicMaterial color="#efedf2" transparent opacity={0.4} />
+            <meshBasicMaterial ref={material => { laneMaterials.current[z] = material; }} color="#efedf2" transparent opacity={streetPlaced ? .4 : .32} depthWrite={false} />
           </mesh>
         ))}
       {Array.from({ length: 8 }, (_, i) => (
         <mesh
           key={"zebra" + i}
           rotation={[-PI / 2, 0, 0]}
-          position={[STREET_X - 2.45 + i * 0.7, 0.03, CROSSWALK_Z]}
+          position={[STREET_X - 2.45 + i * 0.7, 0.055, CROSSWALK_Z]}
           receiveShadow
         >
           <planeGeometry args={[0.36, 2.2]} />
           <meshStandardMaterial
-            color="#eeeaf2"
+            ref={material => { crosswalkMaterials.current[i] = material; }}
+            color={streetPlaced ? "#eeeaf2" : "#898995"}
             transparent
-            opacity={0.55}
+            opacity={streetPlaced ? .85 : .32}
             roughness={0.9}
           />
         </mesh>
@@ -253,27 +380,36 @@ function Ground() {
     </group>
   );
 }
-function Pool({ at, active, blend, index }) {
+function Pool(props) {
+  return (
+    <Suspense fallback={<PlaceholderPool {...props} />}>
+      <ReferencePool at={props.at} active={props.active} night={props.night} guideActive={props.guideActive} guidancePulse={props.guidancePulse} />
+    </Suspense>
+  );
+}
+
+function PlaceholderPool({ at, active, blend, index, sunny }) {
   let water = useRef(),
-    waterU = useMemo(() => ({ uTime: { value: 0 }, uNight: { value: 0 } }), []);
+    waterU = useMemo(() => ({ uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 0 } }), []);
   let fallU = useMemo(
     () => ({ uTime: { value: 0 }, uNight: { value: 0 } }),
     [],
   );
   useFrame(({ clock }) => {
+    waterU.uDay.value = lerp(waterU.uDay.value, sunny ? 1 : 0, 0.025);
     waterU.uTime.value = clock.elapsedTime;
     waterU.uNight.value = blend.current;
     fallU.uTime.value = clock.elapsedTime;
     fallU.uNight.value = blend.current;
   });
-  const rail = 5.85,
-    inner = 4.75;
+  const rail = 11.2,
+    inner = 10.1;
   return (
     <group position={at}>
       <mesh castShadow receiveShadow position={[0, 0.14, 0]}>
         <boxGeometry args={[rail, 0.31, rail]} />
         <meshStandardMaterial
-          color="#242834"
+          color={sunny ? "#151e32" : "#242834"}
           roughness={0.45}
           metalness={0.45}
         />
@@ -288,14 +424,14 @@ function Pool({ at, active, blend, index }) {
         />
       </mesh>
       <mesh position={[0, 0.315, 0]} rotation={[-PI / 2, 0, 0]}>
-        <planeGeometry args={[1.75, 1.75]} />
+        <planeGeometry args={[3.3, 3.3]} />
         <meshBasicMaterial color="#040912" toneMapped={false} />
       </mesh>
       {[0, 1, 2, 3].map((i) => {
         let along = i < 2;
         let p = along
-          ? [0, 0.42, (i === 0 ? -1 : 1) * 2.91]
-          : [(i === 2 ? -1 : 1) * 2.91, 0.42, 0];
+          ? [0, 0.42, (i === 0 ? -1 : 1) * (rail / 2)]
+          : [(i === 2 ? -1 : 1) * (rail / 2), 0.42, 0];
         return (
           <mesh key={"rail" + i} position={p} castShadow>
             <boxGeometry
@@ -304,7 +440,7 @@ function Pool({ at, active, blend, index }) {
               }
             />
             <meshStandardMaterial
-              color="#4a4850"
+              color={sunny ? "#9a88ad" : "#4a4850"}
               metalness={0.6}
               roughness={0.25}
             />
@@ -314,8 +450,8 @@ function Pool({ at, active, blend, index }) {
       {[0, 1, 2, 3].map((i) => {
         let p =
           i < 2
-            ? [0, -0.1, i === 0 ? -2.27 : 2.27]
-            : [i === 2 ? -2.27 : 2.27, -0.1, 0];
+            ? [0, -0.1, i === 0 ? -inner / 2 : inner / 2]
+            : [i === 2 ? -inner / 2 : inner / 2, -0.1, 0];
         return (
           <mesh
             key={"fall" + i}
@@ -348,12 +484,13 @@ function Pool({ at, active, blend, index }) {
     </group>
   );
 }
-function Tree({
+function PlaceholderTree({
   position,
   scale = 1,
   seed = 12,
   ghost = false,
   night = false,
+  sunny = false,
 }) {
   const props = useMemo(
     () =>
@@ -381,7 +518,7 @@ function Tree({
       <mesh castShadow position={[0, 0.85, 0]}>
         <cylinderGeometry args={[0.14, 0.22, 1.75, 9]} />
         <meshStandardMaterial
-          color={ghost ? "#b7a4cf" : "#706071"}
+          color={ghost ? "#b7a4cf" : sunny ? "#705461" : "#706071"}
           transparent={ghost}
           opacity={ghost ? 0.27 : 1}
           roughness={1}
@@ -400,7 +537,7 @@ function Tree({
         >
           <cylinderGeometry args={[0.065, 0.12, 1.2, 7]} />
           <meshStandardMaterial
-            color="#776472"
+            color={sunny ? "#795968" : "#776472"}
             transparent={ghost}
             opacity={ghost ? 0.2 : 1}
           />
@@ -414,9 +551,9 @@ function Tree({
               ghost
                 ? "#e2d2ff"
                 : new THREE.Color().setHSL(
-                    0.34 + hash(i + seed) * 0.1,
-                    0.18 + 0.08 * hash(i),
-                    night ? 0.43 : 0.61,
+                    (sunny ? 0.29 : 0.34) + hash(i + seed) * (sunny ? 0.07 : 0.1),
+                    (sunny ? 0.29 : 0.18) + 0.08 * hash(i),
+                    night ? 0.43 : sunny ? 0.57 : 0.61,
                   )
             }
             transparent
@@ -428,118 +565,95 @@ function Tree({
     </group>
   );
 }
-function Oculus() {
+function Tree(props) {
   return (
-    <group position={OCULUS}>
-      {Array.from({ length: 17 }, (_, i) => {
-        let z = -3.8 + i * 0.49;
-        return (
-          <mesh
-            key={i}
-            position={[0, 1.1, z]}
-            rotation={[0, 0, -0.28 + Math.abs(i - 8) * 0.035]}
-            castShadow
-          >
-            <boxGeometry args={[0.11, 2.5, 0.12]} />
-            <meshStandardMaterial
-              color="#f8f3f9"
-              metalness={0.22}
-              roughness={0.47}
-            />
-          </mesh>
-        );
-      })}
-    </group>
+    <Suspense fallback={<PlaceholderTree {...props} />}>
+      <TexturedTree {...props} />
+    </Suspense>
   );
 }
-function Buildings({ night }) {
-  let buildings = useMemo(
-    () =>
-      Array.from({ length: 23 }, (_, i) => {
-        let x = -29 + i * 3.3,
-          z = -28 - (i % 3) * 1.5,
-          hh = 4 + hash(i * 21) * 17;
-        return { x, z, hh, w: 2.5 + hash(i * 9) * 1.7 };
-      }),
-    [],
-  );
+
+function PlaceholderMuseum() {
   return (
-    <group>
-      {buildings.map((b, i) => (
-        <mesh key={i} castShadow position={[b.x, b.hh / 2 - 0.3, b.z]}>
-          <boxGeometry args={[b.w, b.hh, b.w * 0.82]} />
-          <meshStandardMaterial
-            color={night ? "#7e7b9f" : "#b9adbc"}
-            transparent
-            opacity={0.52}
-            metalness={0.14}
-            roughness={0.63}
-          />
+    <group position={[2, 0, -.4]} rotation={[0, -.12, 0]} scale={[.85, 1, .8]}>
+      <mesh position={[0, .5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[4.1, 1, 6]} />
+        <meshStandardMaterial color="#8f929e" roughness={.7} />
+      </mesh>
+      <mesh position={[0, 1.45, 0]} rotation={[0, 0, -.13]} castShadow>
+        <boxGeometry args={[4.4, .22, 6.4]} />
+        <meshStandardMaterial color="#bcc8da" metalness={.5} roughness={.35} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * 2.06, 1.02, 0]}>
+          <boxGeometry args={[.06, .85, 5.8]} />
+          <meshStandardMaterial color="#6395a8" metalness={.6} roughness={.2} />
+        </mesh>
+      ))}
+      {Array.from({length: 12}, (_, i) => (
+        <mesh key={i} position={[-2.1, 1, -2.7 + i * .49]}>
+          <boxGeometry args={[.08, 1.1, .045]} />
+          <meshStandardMaterial color="#d3d5e1" />
         </mesh>
       ))}
     </group>
   );
 }
-function Person({ zone, index, data, paused, night, enabled, simTime }) {
+
+function Person({ zone, index, data, enabled, simTime, stopPosition }) {
   const ref = useRef(),
     flashRef = useRef();
-  const route = ROUTES[zone];
-  const style = useMemo(
-    () => ({
-      head: "#c2a99e",
-      coat: ["#6a697c", "#7d7a99", "#d0b5bc", "#8a91a2", "#5d6b83"][index % 5],
-    }),
-    [index],
-  );
-  useFrame(({ clock }) => {
+  const moving=useRef(index < data.crossings);
+  const locomotion=useRef(1);
+  const travel=useRef(hash(index * 31 + (zone === "north" ? 1 : zone === "tree" ? 2 : 3)));
+  const previousTime=useRef(simTime.current);
+  // Route, direction and character choice use separate seeds.
+  const direction = Math.floor(index / 2) % 2 === 0 ? 1 : -1;
+  const female = hash(index * 47 + (zone === "north" ? 11 : zone === "tree" ? 23 : 37)) > .5;
+  const linearPath = zone === "street" || (zone === "tree" && index % 3 === 0);
+  useFrame(() => {
     if (!ref.current) return;
     let t = simTime.current;
-    let seed = hash(
-      index * 31 + (zone === "north" ? 1 : zone === "tree" ? 2 : 3),
-    );
     let speed =
-      (0.19 + 0.14 * hash(index * 12)) *
+      (0.65 + 0.35 * hash(index * 12)) *
       Math.max(0.65, Math.min(1.3, data.crossings / 23));
-    let alpha = enabled ? 1 : 0.12;
-    let f = (t * speed * 0.2 + seed) % 1;
-    let stopped = hash(index * 3 + 99) < Math.min(0.56, data.stops / 76);
-    if (stopped) f = 0.1 + hash(index * 8) * 0.78;
-    const dx = route.b[0] - route.a[0],
-      dz = route.b[1] - route.a[1],
-      len = Math.hypot(dx, dz),
-      side = ((index % 3) - 1) * 0.38;
-    let x = lerp(route.a[0], route.b[0], f) - (dz / len) * side,
-      z = lerp(route.a[1], route.b[1], f) + (dx / len) * side;
-    ref.current.position.set(x, 0.08, z);
-    ref.current.rotation.y = Math.atan2(dx, dz);
-    ref.current.visible =
-      index < (enabled ? Math.round(5 + data.crossings * 0.26) : 3);
+    const delta=Math.max(0,Math.min(.1,t-previousTime.current));
+    previousTime.current=t;
+    const stopped = enabled && index >= data.crossings;
+    moving.current = !stopped;
+    const routeLength = zone === "north" ? 50 : zone === "tree" ? (linearPath ? 13.5 : 14) : (index % 2 === 0 ? 21.8 : 32);
+    if (!stopped) travel.current = (travel.current + delta * speed / routeLength) % 1;
+    // A short offstage gap separates the exit from the next entrance on open paths.
+    const inTransit = linearPath && !stopped && travel.current >= .96;
+    const progress = linearPath && !stopped ? Math.min(travel.current / .96, 1) : travel.current;
+    const f = direction === 1 ? progress : 1-progress;
+    const [x,z] = stopped ? stopPosition : pedestrianRoute(zone,index,linearPath ? f : f % 1,PEDESTRIAN_OBSTACLES);
+    const nextF = linearPath ? THREE.MathUtils.clamp(f + direction * .001, 0, 1) : (f + direction * .001 + 1) % 1;
+    const [nextX,nextZ] = pedestrianRoute(zone,index,nextF,PEDESTRIAN_OBSTACLES);
+    const traveled = Math.hypot(x-ref.current.position.x,z-ref.current.position.z);
+    moving.current = !stopped && !inTransit && (delta === 0 || traveled > .00001);
+    locomotion.current = speed / .75;
+    const onRoad = zone === "street" && Math.abs(x-STREET_X)<3;
+    const groundHeight = onRoad ? (Math.abs(z-CROSSWALK_Z)<1.1 ? .055 : .035) : .002;
+    ref.current.position.set(x, groundHeight, z);
+    const focal = zone === "north" ? NORTH_POOL : zone === "tree" ? SURVIVOR_TREE : [STREET_X,0,z];
+    ref.current.rotation.y = stopped
+      ? Math.atan2(focal[0]-x,focal[2]-z)
+      : Math.atan2(nextX-x,nextZ-z);
+    ref.current.visible = enabled && !inTransit;
     ref.current.scale.setScalar(1);
     if (flashRef.current)
       flashRef.current.visible =
         enabled &&
         stopped &&
-        index / 24 < data.photographing / Math.max(1, data.stops) &&
+        index - data.crossings < data.photographing &&
         Math.sin(t * 3 + index * 2.6) > 0.984;
   });
   return (
-    <group ref={ref}>
-      <mesh position={[0, 0.6, 0]} castShadow>
-        <sphereGeometry args={[0.105, 10, 8]} />
-        <meshStandardMaterial color={style.head} roughness={1} />
-      </mesh>
-      <mesh position={[0, 0.26, 0]} castShadow>
-        <capsuleGeometry args={[0.11, 0.35, 4, 8]} />
-        <meshStandardMaterial color={style.coat} roughness={1} />
-      </mesh>
-      <mesh position={[-0.055, 0.04, 0]}>
-        <boxGeometry args={[0.075, 0.24, 0.08]} />
-        <meshStandardMaterial color="#55566d" />
-      </mesh>
-      <mesh position={[0.055, 0.04, 0]}>
-        <boxGeometry args={[0.075, 0.24, 0.08]} />
-        <meshStandardMaterial color="#55566d" />
-      </mesh>
+    <group ref={ref} userData={{ pedestrian: true }}>
+      <Suspense fallback={null}>
+        <AnimatedVisitor female={female} moving={moving} locomotion={locomotion} simTime={simTime} seed={index} />
+      </Suspense>
       <mesh ref={flashRef} position={[0, 0.62, 0.2]}>
         <sphereGeometry args={[0.09, 8, 8]} />
         <meshBasicMaterial color={[4, 4, 3.6]} toneMapped={false} />
@@ -549,6 +663,8 @@ function Person({ zone, index, data, paused, night, enabled, simTime }) {
 }
 function People({ placed, period, paused }) {
   const d = OBS[period];
+  const idleLayout = useMemo(() => Object.fromEntries(["north","tree","street"].map(zone =>
+    [zone, stoppedPositions(zone,d[zone].stops,d[zone].crossings,PEDESTRIAN_OBSTACLES)])),[d]);
   const simTime = useRef(0);
   useFrame((_, dt) => {
     if (!paused) simTime.current += dt;
@@ -556,15 +672,14 @@ function People({ placed, period, paused }) {
   return (
     <group>
       {["north", "tree", "street"].map((zone) =>
-        Array.from({ length: 24 }, (_, i) => (
+        Array.from({ length: placed[zone] ? d[zone].crossings + d[zone].stops : 0 }, (_, i) => (
           <Person
             key={zone + i}
             zone={zone}
             index={i}
+            stopPosition={idleLayout[zone][i-d[zone].crossings]}
             data={d[zone]}
             enabled={placed[zone]}
-            night={period === "evening"}
-            paused={paused}
             simTime={simTime}
           />
         )),
@@ -572,50 +687,17 @@ function People({ placed, period, paused }) {
     </group>
   );
 }
-function Sparkles({ night }) {
-  const coords = useMemo(
-    () =>
-      Array.from({ length: 110 }, (_, i) => [
-        hash(i * 19) * 36 - 18,
-        1 + hash(i * 7) * 10,
-        hash(i * 13) * 27 - 12,
-      ]),
-    [],
-  );
-  const group = useRef();
-  useFrame(({ clock }) => {
-    if (group.current)
-      group.current.rotation.y = Math.sin(clock.elapsedTime * 0.08) * 0.003;
-  });
-  return (
-    <group ref={group}>
-      {coords.map((p, i) => (
-        <mesh key={i} position={p}>
-          <sphereGeometry args={[0.014 + hash(i * 17) * 0.026, 4, 4]} />
-          <meshBasicMaterial
-            color={i % 3 === 0 ? "#fff4d9" : "#f5e4ff"}
-            transparent
-            opacity={night ? 0.85 : 0.45}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
 // widen the lens on narrow screens, then back up if needed to keep the plaza in view
 const BASE_FOV = 42,
   MAX_FOV = 75,
-  FIT_ASPECT = 1.3,
-  FOG_NEAR = 21,
-  FOG_FAR = 85;
+  FIT_ASPECT = 1.3;
 const deg = THREE.MathUtils.degToRad;
 function Rig({ cameraZone }) {
-  const { camera, scene } = useThree();
+  const { camera } = useThree();
   let look = useRef(new THREE.Vector3(...OVERVIEW.target));
   const goal = useMemo(() => new THREE.Vector3(), []);
   const aim = useMemo(() => new THREE.Vector3(), []);
-  useFrame((_, dt) => {
+  useFrame(({ pointer }, dt) => {
     const s = (cameraZone && CAMERA_PRESETS[cameraZone]) || OVERVIEW;
     const halfTan =
       Math.tan(deg(BASE_FOV / 2)) * Math.max(1, FIT_ASPECT / camera.aspect);
@@ -624,9 +706,9 @@ function Rig({ cameraZone }) {
     const pullBack = cameraZone ? 1 : Math.max(1, halfTan / maxTan);
     aim.set(...s.target);
     goal.set(...s.pos).sub(aim).multiplyScalar(pullBack).add(aim);
-    if (scene.fog) {
-      scene.fog.near = FOG_NEAR * pullBack;
-      scene.fog.far = FOG_FAR * pullBack;
+    if (!cameraZone) {
+      goal.x += pointer.x * 1.2;
+      goal.y += pointer.y * .45;
     }
     let k = Math.min(1, dt * 1.2);
     camera.position.lerp(goal, k);
@@ -649,9 +731,13 @@ function ScreenAnchors({ overlays }) {
   };
   useFrame(() => {
     const els = overlays.current;
-    const dock = document.querySelector(".fragment-dock");
-    const floor = (dock ? dock.getBoundingClientRect().top : size.height) - 14;
+    const floor = size.height - 24;
     const taken = [];
+    const menu = document.querySelector(".scene-intro");
+    if (menu) {
+      const r = menu.getBoundingClientRect();
+      taken.push([r.left - 12, r.top - 12, r.right + 12, r.bottom + 12]);
+    }
     const cards = [];
     for (const key in els) {
       const [kind, zone] = key.split(":");
@@ -661,8 +747,8 @@ function ScreenAnchors({ overlays }) {
       }
       const [x, y] =
         zone === "sky"
-          ? toScreen(_anchor.set(SKY_NDC[0], SKY_NDC[1], 0))
-          : toScreen(_anchor.set(...ANCHORS[zone].at).project(camera));
+          ? toScreen(_anchor.copy(CELESTIAL_TOP).project(camera))
+          : toScreen(_anchor.set(...(kind === "pin" ? ANCHORS[zone].pin : ANCHORS[zone].at)).project(camera));
       place(els[key], x, y);
       if (kind === "pin") taken.push([x - 22, y - 22, x + 22, y + 22]);
     }
@@ -716,51 +802,74 @@ function ScreenAnchors({ overlays }) {
   return null;
 }
 
+function SceneLighting({ daylight, blend }) {
+  const ambient=useRef(),sunlight=useRef(),hemisphere=useRef();
+  const colors=useMemo(()=>({warm:new THREE.Color("#fff2e6"),white:new THREE.Color("#ffffff"),night:new THREE.Color("#bdc5f7"),moon:new THREE.Color("#c9cafa")}),[]);
+  useFrame(()=>{
+    const d=daylight.current,n=blend.current;
+    ambient.current.intensity=lerp(lerp(1.65,2.1,d),.88,n);
+    ambient.current.color.copy(colors.warm).lerp(colors.white,d).lerp(colors.night,n);
+    sunlight.current.intensity=lerp(lerp(3,3.4,d),2,n);
+    sunlight.current.color.copy(colors.warm).lerp(colors.white,d).lerp(colors.moon,n);
+    hemisphere.current.intensity=lerp(.12,.85,d)*(1-n*.8);
+  });
+  return <>
+    <ambientLight ref={ambient}/>
+    <hemisphereLight ref={hemisphere} args={["#d9efff","#c9bbc9",.12]}/>
+    <directionalLight ref={sunlight} position={[-12,22,8]} castShadow
+      shadow-mapSize={[2048,2048]} shadow-camera-left={-30} shadow-camera-right={30}
+      shadow-camera-top={30} shadow-camera-bottom={-30}/>
+  </>;
+}
+
 export default function World3D({
   placed,
   period,
   paused,
   cameraZone,
   overlays,
+  guideActive = false,
 }) {
   const blend = useRef(0);
+  const celestial=useRef({to:"none",from:"none",progress:1,fromNight:0,fromDay:0,sun:1,moon:0});
+  const guidancePulse = useRef(0);
+  const guideElapsed = useRef(0);
+  const reducedMotion = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const daylight = useRef(0);
+  const sunny = placed.sky && period === "afternoon";
   useFrame((_, dt) => {
-    blend.current = lerp(
-      blend.current,
-      period === "evening" ? 1 : 0,
-      Math.min(1, dt * 0.35),
-    );
+    guideElapsed.current = guideActive ? guideElapsed.current + dt : 0;
+    guidancePulse.current = reducedMotion ? .5 : .5 - .5 * Math.cos(guideElapsed.current * Math.PI * 2 / 1.8);
+    const state=celestial.current;
+    const requested=!placed.sky ? "none" : period==="evening" ? "moon" : "sun";
+    if (requested!==state.to) {
+      state.from=state.to;state.to=requested;state.progress=0;
+      state.fromNight=blend.current;state.fromDay=daylight.current;
+    }
+    state.progress=Math.min(1,state.progress+dt/4);
+    const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+    const p=state.progress;
+    const setting=1-ease(p/.45),rising=ease((p-.55)/.45);
+    state.sun=requested==="none" || (state.from==="none" && state.to==="sun") ? 1 : (state.from==="sun" || state.from==="none") && p<.45 ? setting : state.to==="sun" ? rising : 0;
+    state.moon=state.from==="moon" && p<.45 ? setting : state.to==="moon" ? rising : 0;
+    const dawn=state.from==="moon" && requested==="sun" ? ease((p-.15)/.85) : ease(p);
+    blend.current=lerp(state.fromNight,requested==="moon" ? 1 : 0,dawn);
+    daylight.current=lerp(state.fromDay,requested==="sun" ? 1 : 0,ease(p));
   });
   return (
     <>
       <color attach="background" args={["#a8bad4"]} />
-      <fog
-        attach="fog"
-        args={[period === "evening" ? "#70688f" : "#e4bcd7", FOG_NEAR, FOG_FAR]}
-      />
       <Rig cameraZone={cameraZone} />
       <ScreenAnchors overlays={overlays} />
-      <Sky blend={blend} />
-      <SunMoon placed={placed.sky} night={period === "evening"} blend={blend} />
-      <ambientLight
-        intensity={period === "evening" ? 0.88 : 1.65}
-        color={period === "evening" ? "#bdc5f7" : "#fff2e6"}
-      />
-      <directionalLight
-        position={[-12, 22, 8]}
-        intensity={period === "evening" ? 2 : 3}
-        color={period === "evening" ? "#c9cafa" : "#fff1df"}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-      />
-      <Ground />
-      <Buildings night={period === "evening"} />
-      <Pool at={NORTH_POOL} active={placed.north} blend={blend} index={1} />
-      <Pool at={SOUTH_POOL} active={true} blend={blend} index={2} />
+      <Sky blend={blend} daylight={daylight} />
+      <SunMoon placed={placed.sky} night={period === "evening"} blend={blend} guideActive={guideActive} guidancePulse={guidancePulse} celestial={celestial} />
+      <SceneLighting daylight={daylight} blend={blend} />
+      <Ground sunny={sunny} streetPlaced={placed.street} guideActive={guideActive} guidancePulse={guidancePulse} />
+      <Suspense fallback={null}>
+        <UploadedSkyline night={period === "evening"} />
+      </Suspense>
+      <Pool guideActive={guideActive} guidancePulse={guidancePulse} at={NORTH_POOL} active={placed.north} blend={blend} index={1} sunny={sunny} night={period === "evening"} />
+      <Pool at={SOUTH_POOL} active={true} blend={blend} index={2} sunny={sunny} night={period === "evening"} />
       {GROVE.map(([x, z], i) => (
         <Tree
           key={i}
@@ -768,26 +877,43 @@ export default function World3D({
           seed={i * 17 + 1}
           scale={0.9 + hash(i * 4) * 0.25}
           night={period === "evening"}
+          sunny={sunny}
         />
       ))}
+      <Suspense fallback={null}>
+        {BUSHES.map(([x, z], i) => (
+          <TexturedTree key={"bush-" + i} bush position={[x, .025, z]}
+            seed={i} scale={.85 + hash(i + 27) * .3} night={period === "evening"} />
+        ))}
+      </Suspense>
       <Tree
         position={SURVIVOR_TREE}
+        survivor
         seed={392}
-        scale={1.65}
+        scale={1.2}
         ghost={!placed.tree}
+        guideActive={guideActive}
+        guidancePulse={guidancePulse}
         night={period === "evening"}
+        sunny={sunny}
       />
-      <Oculus />
+      <Suspense fallback={<PlaceholderMuseum />}>
+        <ReferenceMuseum night={period === "evening"} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <UploadedOculus position={OCULUS} night={period === "evening"} />
+      </Suspense>
       <People placed={placed} period={period} paused={paused} />
-      <Sparkles night={period === "evening"} />
-      <EffectComposer multisampling={0}>
+      <EffectComposer multisampling={0} depthBuffer>
+        <AtmosphericHaze daylight={daylight} blend={blend} />
+
         <Bloom
           mipmapBlur
           intensity={0.68}
           luminanceThreshold={1.15}
           luminanceSmoothing={0.25}
         />
-        <Vignette eskil={false} offset={0.23} darkness={0.31} />
+        <Vignette eskil={false} offset={0.23} darkness={sunny ? 0.08 : 0.31} />
       </EffectComposer>
     </>
   );
