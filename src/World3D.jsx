@@ -4,6 +4,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import AtmosphericHaze, { skyColors, useSkyHorizon } from "./AtmosphericHaze.jsx";
 import AnimatedVisitor from "./AnimatedVisitor.jsx";
+import DreamySurfaceLight from "./DreamySurfaceLight.jsx";
+import { EnchantedAtmosphere, EnchantedDust } from "./EnchantedEnvironment.jsx";
 import { pedestrianRoute, stoppedPositions } from "./PedestrianPaths.js";
 import ParkLawns from "./ParkLawns.jsx";
 import { UploadedOculus, UploadedSkyline } from "./UploadedArchitecture.jsx";
@@ -47,7 +49,7 @@ const ANCHORS = {
 };
 const CAMERA_PRESETS = {
   north: { pos: [1, 2.7, -2], target: [-6.42, 0, -9.93] },
-  tree: { pos: [-7, 2.1, 16], target: [-3, 2.6, 9.92] },
+  tree: { pos: [-8.5, 2.1, 18.5], target: [-3, 1.6, 9.92] },
   street: { pos: [18, 1.75, 9], target: [16.5, .9, -6] },
 };
 
@@ -121,6 +123,18 @@ uniform float uNight;uniform float uDay;uniform float uTime;
 uniform vec2 uSkySize;
 ${skyColors}
 float starHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float cloudNoise(vec2 p){
+  vec2 cell=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(starHash(cell),starHash(cell+vec2(1.,0.)),f.x),mix(starHash(cell+vec2(0.,1.)),starHash(cell+1.),f.x),f.y);
+}
+float cloudLayers(vec2 p){
+  float value=0.,weight=.5;
+  for(int i=0;i<5;i++){
+    value+=cloudNoise(p)*weight;
+    p=p*2.03+vec2(7.1,13.7);weight*=.5;
+  }
+  return value;
+}
 void main(){
   vec3 color=skyColor(vSkyUv,uDay,uNight);
   vec2 grid=vSkyUv*uSkySize/48.;
@@ -135,6 +149,17 @@ void main(){
   float skyOnly=smoothstep(skyEdge(vSkyUv.x)+.015,skyEdge(vSkyUv.x)+.05,vSkyUv.y);
   float stars=step(.86,seed)*(core*.35+glow+cross*.5)*twinkle*uNight*skyOnly;
   color+=mix(vec3(.65,.76,1.),vec3(1.,.92,.74),seed)*stars*.7;
+  // Soft cloud banks drift behind the skyline, leaving gaps for the blue gradient.
+  vec2 cloudUv=vec2(vSkyUv.x*uSkySize.x/max(1.,uSkySize.y)*3.,vSkyUv.y*7.);
+  cloudUv+=vec2(uTime*.009,uTime*.0015);
+  float cloudField=cloudLayers(cloudUv+vec2(cloudNoise(cloudUv*.6)*.7,0.));
+  float cloud=smoothstep(.46,.69,cloudField);
+  float cloudMask=smoothstep(skyEdge(vSkyUv.x)+.035,skyEdge(vSkyUv.x)+.14,vSkyUv.y);
+  vec3 cloudColor=mix(linearRGB(vec3(.88,.86,.96)),linearRGB(vec3(1.,.97,.94)),smoothstep(.48,.72,cloudField));
+  color=mix(color,cloudColor,cloud*cloudMask*uDay*(1.-uNight)*.5);
+  float nightCloud=smoothstep(.60,.78,cloudField);
+  vec3 nightCloudColor=mix(linearRGB(vec3(.32,.34,.53)),linearRGB(vec3(.48,.48,.68)),cloudField);
+  color=mix(color,nightCloudColor,nightCloud*cloudMask*uNight*.3);
   gl_FragColor=vec4(color,1.);
 }`;
 const waterVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
@@ -155,19 +180,19 @@ float foam=sin(vUv.y*90.-uTime*13.+hash(floor(vUv.x*65.))*6.28)*.5+.5;
 float a=.2+.35*pow(streak,5.)+.13*foam;
 vec3 c=mix(vec3(.56,.82,.94),vec3(.58,.67,.95),uNight);gl_FragColor=vec4(c,a);}`;
 
-function Sky({ blend, daylight }) {
+function Sky({ blend, daylight, paused, reducedMotion }) {
   const horizon = useSkyHorizon();
   const ref = useRef();
   const uniforms = useMemo(
     () => ({ skyHorizon: { value: horizon }, uNight: { value: 0 }, uDay: { value: 0 }, uTime: { value: 0 }, uSkySize: { value: new THREE.Vector2(1, 1) } }),
     [horizon],
   );
-  useFrame(({ clock, size }) => {
+  useFrame(({ size },dt) => {
     if (ref.current) {
       ref.current.uniforms.uSkySize.value.set(size.width, size.height);
       ref.current.uniforms.uNight.value = blend.current;
       ref.current.uniforms.uDay.value = daylight.current;
-      ref.current.uniforms.uTime.value = clock.elapsedTime;
+      if(!paused && !reducedMotion) ref.current.uniforms.uTime.value += Math.min(dt,.05);
     }
   });
   return (
@@ -230,12 +255,6 @@ function SunMoon({ placed, night, blend, guideActive, guidancePulse, celestial }
           uniforms={{moonOpacity: {value: 1}}} transparent depthWrite={false} toneMapped={false} />
         </mesh>
       </group>
-      <pointLight
-        position={[12, 14, -3]}
-        intensity={placed ? 6 : 0}
-        distance={56}
-        color={night ? "#c1c6ff" : "#ffe3c9"}
-      />
     </group>
   );
 }
@@ -383,7 +402,7 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
 function Pool(props) {
   return (
     <Suspense fallback={<PlaceholderPool {...props} />}>
-      <ReferencePool at={props.at} active={props.active} night={props.night} guideActive={props.guideActive} guidancePulse={props.guidancePulse} />
+      <ReferencePool at={props.at} active={props.active} night={props.night} celestial={props.celestial} lightPosition={CELESTIAL_TOP} blend={props.blend} guideActive={props.guideActive} guidancePulse={props.guidancePulse} />
     </Suspense>
   );
 }
@@ -802,15 +821,23 @@ function ScreenAnchors({ overlays }) {
   return null;
 }
 
-function SceneLighting({ daylight, blend }) {
+function SceneLighting({ daylight, blend, celestial }) {
   const ambient=useRef(),sunlight=useRef(),hemisphere=useRef();
   const colors=useMemo(()=>({warm:new THREE.Color("#fff2e6"),white:new THREE.Color("#ffffff"),night:new THREE.Color("#bdc5f7"),moon:new THREE.Color("#c9cafa")}),[]);
   useFrame(()=>{
     const d=daylight.current,n=blend.current;
     ambient.current.intensity=lerp(lerp(1.65,2.1,d),.88,n);
     ambient.current.color.copy(colors.warm).lerp(colors.white,d).lerp(colors.night,n);
-    sunlight.current.intensity=lerp(lerp(3,3.4,d),2,n);
-    sunlight.current.color.copy(colors.warm).lerp(colors.white,d).lerp(colors.moon,n);
+    const state=celestial.current;
+    const active=state.to!=="none";
+    const altitude=Math.max(state.sun,state.moon);
+    const moonlight=state.moon>state.sun;
+    if(active){
+      sunlight.current.position.copy(CELESTIAL_TOP);
+      sunlight.current.position.y-=45*(1-altitude);
+    } else sunlight.current.position.set(-12,22,8);
+    sunlight.current.intensity=active ? (moonlight ? 2 : 3.4)*THREE.MathUtils.smoothstep(altitude,.12,1) : 3;
+    sunlight.current.color.copy(moonlight ? colors.moon : colors.warm).lerp(colors.white,moonlight ? 0 : d);
     hemisphere.current.intensity=lerp(.12,.85,d)*(1-n*.8);
   });
   return <>
@@ -818,7 +845,8 @@ function SceneLighting({ daylight, blend }) {
     <hemisphereLight ref={hemisphere} args={["#d9efff","#c9bbc9",.12]}/>
     <directionalLight ref={sunlight} position={[-12,22,8]} castShadow
       shadow-mapSize={[2048,2048]} shadow-camera-left={-30} shadow-camera-right={30}
-      shadow-camera-top={30} shadow-camera-bottom={-30}/>
+      shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={180}
+      shadow-normalBias={.025} shadow-bias={-.00015}/>
   </>;
 }
 
@@ -846,12 +874,12 @@ export default function World3D({
       state.from=state.to;state.to=requested;state.progress=0;
       state.fromNight=blend.current;state.fromDay=daylight.current;
     }
-    state.progress=Math.min(1,state.progress+dt/4);
+    state.progress=Math.min(1,state.progress+dt/6.5);
     const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
     const p=state.progress;
     const setting=1-ease(p/.45),rising=ease((p-.55)/.45);
-    state.sun=requested==="none" || (state.from==="none" && state.to==="sun") ? 1 : (state.from==="sun" || state.from==="none") && p<.45 ? setting : state.to==="sun" ? rising : 0;
-    state.moon=state.from==="moon" && p<.45 ? setting : state.to==="moon" ? rising : 0;
+    state.sun=requested==="none" ? 1 : state.from==="none" ? (requested==="sun" ? 1 : 0) : state.from==="sun" && p<.45 ? setting : state.to==="sun" ? rising : 0;
+    state.moon=state.from==="none" ? (requested==="moon" ? 1 : 0) : state.from==="moon" && p<.45 ? setting : state.to==="moon" ? rising : 0;
     const dawn=state.from==="moon" && requested==="sun" ? ease((p-.15)/.85) : ease(p);
     blend.current=lerp(state.fromNight,requested==="moon" ? 1 : 0,dawn);
     daylight.current=lerp(state.fromDay,requested==="sun" ? 1 : 0,ease(p));
@@ -861,15 +889,16 @@ export default function World3D({
       <color attach="background" args={["#a8bad4"]} />
       <Rig cameraZone={cameraZone} />
       <ScreenAnchors overlays={overlays} />
-      <Sky blend={blend} daylight={daylight} />
+      <Sky blend={blend} daylight={daylight} paused={paused} reducedMotion={reducedMotion} />
       <SunMoon placed={placed.sky} night={period === "evening"} blend={blend} guideActive={guideActive} guidancePulse={guidancePulse} celestial={celestial} />
-      <SceneLighting daylight={daylight} blend={blend} />
+      <SceneLighting daylight={daylight} blend={blend} celestial={celestial} />
+      <DreamySurfaceLight celestial={celestial} lightPosition={CELESTIAL_TOP} />
       <Ground sunny={sunny} streetPlaced={placed.street} guideActive={guideActive} guidancePulse={guidancePulse} />
       <Suspense fallback={null}>
         <UploadedSkyline night={period === "evening"} />
       </Suspense>
-      <Pool guideActive={guideActive} guidancePulse={guidancePulse} at={NORTH_POOL} active={placed.north} blend={blend} index={1} sunny={sunny} night={period === "evening"} />
-      <Pool at={SOUTH_POOL} active={true} blend={blend} index={2} sunny={sunny} night={period === "evening"} />
+      <Pool celestial={celestial} guideActive={guideActive} guidancePulse={guidancePulse} at={NORTH_POOL} active={placed.north} blend={blend} index={1} sunny={sunny} night={period === "evening"} />
+      <Pool celestial={celestial} at={SOUTH_POOL} active={true} blend={blend} index={2} sunny={sunny} night={period === "evening"} />
       {GROVE.map(([x, z], i) => (
         <Tree
           key={i}
@@ -904,8 +933,11 @@ export default function World3D({
         <UploadedOculus position={OCULUS} night={period === "evening"} />
       </Suspense>
       <People placed={placed} period={period} paused={paused} />
+      <EnchantedDust daylight={daylight} blend={blend} paused={paused} reducedMotion={reducedMotion} />
       <EffectComposer multisampling={0} depthBuffer>
-        <AtmosphericHaze daylight={daylight} blend={blend} />
+        <AtmosphericHaze daylight={daylight} blend={blend} paused={paused} reducedMotion={reducedMotion} />
+        <EnchantedAtmosphere daylight={daylight} blend={blend} lightPosition={CELESTIAL_TOP} celestial={celestial}
+          paused={paused} reducedMotion={reducedMotion} />
 
         <Bloom
           mipmapBlur

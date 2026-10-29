@@ -4,9 +4,11 @@ import WaterfallParticles from "./WaterfallParticles.jsx";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Color } from "three";
 
-export default function ReferencePool({ at, active, night, guideActive = false, guidancePulse }) {
+export default function ReferencePool({ at, active, night, celestial, lightPosition, blend, guideActive = false, guidancePulse }) {
   const gltf = useLoader(GLTFLoader, import.meta.env.BASE_URL + "models/reference-pool.glb");
   const time = useMemo(() => ({ value: 0 }), []);
+  const reflection = useMemo(()=>({strength:{value:.2},x:{value:.57},tint:{value:new Color("#fff0c9")}}),[]);
+  const reflectionColors=useMemo(()=>[new Color("#fff0c9"),new Color("#c0d8ff")],[]);
   const model = useMemo(() => {
     const scene = gltf.scene.clone(true);
     scene.traverse((node) => {
@@ -43,19 +45,21 @@ export default function ReferencePool({ at, active, night, guideActive = false, 
             shader.uniforms.poolTime = time;
             shader.uniforms.poolMin = { value: bounds.min };
             shader.uniforms.poolSize = { value: bounds.getSize(bounds.min.clone()) };
-            shader.uniforms.poolGlint = { value: new Color(night ? "#c0d8ff" : "#fff0c9") };
+            shader.uniforms.poolGlint = reflection.tint;
+            shader.uniforms.poolLightStrength = reflection.strength;
+            shader.uniforms.poolReflectionX = reflection.x;
             shader.vertexShader = "varying vec3 poolPoint;\n" + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>",
               "#include <begin_vertex>\npoolPoint=position;");
-            shader.fragmentShader = "uniform float poolTime; uniform vec3 poolMin; uniform vec3 poolSize; uniform vec3 poolGlint; varying vec3 poolPoint;\n" + shader.fragmentShader;
+            shader.fragmentShader = "uniform float poolTime; uniform vec3 poolMin; uniform vec3 poolSize; uniform vec3 poolGlint; uniform float poolLightStrength; uniform float poolReflectionX; varying vec3 poolPoint;\n" + shader.fragmentShader;
             shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>",
               `#include <color_fragment>
               vec2 waterUV=((poolPoint-poolMin)/max(poolSize,vec3(.001))).xz;
               float lightEnd=smoothstep(.1,.95,1.-waterUV.y);
               diffuseColor.rgb*=${floor ? "mix(.65,1.2,lightEnd)" : "mix(.45,1.65,lightEnd)"};
               float ripple=sin(waterUV.y*110.-poolTime*1.7+sin(waterUV.x*35.+poolTime*.5)*1.2);
-              float reflectionPath=exp(-pow((waterUV.x-.57+sin(waterUV.y*24.-poolTime*.4)*.025)/.16,2.));
-              float glimmer=${floor || !active ? "0." : "reflectionPath*smoothstep(.15,.85,lightEnd)*smoothstep(.3,1.,ripple)"};
+              float reflectionPath=exp(-pow((waterUV.x-poolReflectionX+sin(waterUV.y*24.-poolTime*.4)*.025)/.16,2.));
+              float glimmer=${floor || !active ? "0." : "reflectionPath*smoothstep(.15,.85,lightEnd)*smoothstep(.3,1.,ripple)*poolLightStrength"};
               diffuseColor.rgb=mix(diffuseColor.rgb,poolGlint,glimmer*.28);`);
             shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>",
               "#include <emissivemap_fragment>\ntotalEmissiveRadiance+=poolGlint*glimmer*.12;");
@@ -67,9 +71,17 @@ export default function ReferencePool({ at, active, night, guideActive = false, 
       node.material = Array.isArray(node.material) ? node.material.map(recolor) : recolor(node.material);
     });
     return scene;
-  }, [gltf, night, active, time]);
+  }, [gltf, night, active, time, reflection]);
   useFrame((_, dt) => {
     time.value += dt;
+    const state=celestial?.current;
+    const altitude=state ? Math.max(state.sun,state.moon) : 1;
+    reflection.strength.value=state?.to==="none" ? .2 : Math.max(0,(altitude-.15)/.85);
+    reflection.tint.value.copy(reflectionColors[0]).lerp(reflectionColors[1],blend?.current ?? (night ? 1 : 0));
+    if(lightPosition){
+      const height=Math.max(2,lightPosition.y-45*(1-altitude));
+      reflection.x.value=.5+Math.tanh((lightPosition.x-at[0])/height)*.3;
+    }
     if (!active) model.traverse(node => {
       if (!node.isMesh || !node.visible) return;
       const opacity = guideActive ? .24 * (1 - (guidancePulse?.current ?? 0) * .85) : .24;

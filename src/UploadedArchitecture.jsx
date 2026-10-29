@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useLoader } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
+import { SKYLINE_COUNT, skylinePosition } from "./SkylineLayout.js";
 
 // use each coplanar facade's own bounds, rather than the tower's overall height
 function facadeGeometry(source) {
@@ -86,7 +87,7 @@ export function UploadedSkyline({ night }) {
     const allLibraries=files.slice(0,2).map(file=>file.scene.children.filter(node=>node.name.startsWith("building-")));
     const oneWTC=files[2].scene;
     const libraries=allLibraries.map(library=>library.filter(building=>!isOneWTC(building)));
-    const count=46;
+    const count=SKYLINE_COUNT;
     for(let i=0;i<count+(oneWTC ? 1 : 0);i++) {
       const landmark=i===count;
       const library=libraries[i%2];
@@ -149,9 +150,7 @@ export function UploadedSkyline({ night }) {
       const factor=landmark ? 28/size.y : Math.min(5.4/Math.max(size.x,size.z),height/size.y);
       scene.scale.setScalar(factor);
       scene.position.set(-center.x*factor,-box.min.y*factor,-center.z*factor);
-      const angle=-1.52+i/(count-1)*3.55;
-      // pull the eastern skyline outward to leave the Oculus its own space
-      const radius=angle>.75 ? 46+(i%3) : 38+(i%3)*2;
+      const {angle,position}=skylinePosition(Math.min(i,count-1));
       const group=new THREE.Group();
       if (landmark) {
         // northwest of the North Pool, as in the supplied map
@@ -159,7 +158,7 @@ export function UploadedSkyline({ night }) {
         group.position.set(-13,0,-25);
         group.rotation.y=Math.PI/2;
       } else {
-        group.position.set(Math.sin(angle)*radius,0,2-Math.cos(angle)*radius);
+        group.position.set(...position);
         group.rotation.y=-angle;
       }
       group.add(scene);root.add(group);
