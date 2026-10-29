@@ -165,7 +165,7 @@ export default function App() {
             <p className="landing-eyebrow">An interactive memorial study</p>
             <h1>Elsewhere.</h1>
             <p className="landing-description">
-              A place within the city, suspended in another rhythm.
+              A different rhythm within the city
             </p>
             <button className="landing-enter" disabled={phase === "entering"}
               onClick={() => setPhase("entering")}>
