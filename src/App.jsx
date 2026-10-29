@@ -268,7 +268,7 @@ const [placed, setPlaced] = useState({
       say(
         target === "sky"
           ? fragment === "moon"
-            ? "The evening enters the memorial."
+            ? "The night falls."
             : "Afternoon light returns."
           : LABELS[target] + (placed.sky ? ": observation layer revealed" : " placed. Add the sun or moon to reveal observations."),
       );
