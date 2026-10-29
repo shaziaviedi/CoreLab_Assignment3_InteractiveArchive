@@ -165,7 +165,7 @@ export default function App() {
             <p className="landing-eyebrow">An interactive memorial study</p>
             <h1>Elsewhere.</h1>
             <p className="landing-description">
-              A different rhythm within the city
+              A different rhythm within the city.
             </p>
             <button className="landing-enter" disabled={phase === "entering"}
               onClick={() => setPhase("entering")}>
@@ -364,7 +364,7 @@ const [placed, setPlaced] = useState({
         <>
           <div className="corner-notation">
             <b>Elsewhere.</b>
-            <span>a different rhythm within the city</span>
+            <span>A different rhythm within the city.</span>
           </div>
           {["sky", "north", "tree", "street"].map((id) => (
             <Slot
