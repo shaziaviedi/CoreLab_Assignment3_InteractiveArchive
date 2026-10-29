@@ -74,7 +74,13 @@ function Slot({ id, placed, onPlace, selected, anchorRef }) {
   );
 }
 
-function ZoneStats({ id, period, anchorRef }) {
+function ZoneStats({ id, period, anchorRef, hasObservation }) {
+  if (!hasObservation) return (
+    <div ref={anchorRef} className={"data-popup " + id}>
+      <label>{ZONENAMES[id]}</label>
+      <small className="data-summary">Place the sun or moon to reveal observations.</small>
+    </div>
+  );
   let d = OBS[period][id];
   return(
     <div ref={anchorRef} className={"data-popup " + id} key={period + "-" + id}>
@@ -117,7 +123,7 @@ function Archive({ photos, onClose }){
               <img src={a.url} alt={"Visitor view of " + ZONENAMES[a.zone]} />
               <h3>{ZONENAMES[a.zone]}</h3>
               <p>
-                {a.period === "afternoon" ? "Daytime" : "Evening"} · {a.pedestrians} pedestrians
+                {a.period && a.pedestrians > 0 ? `${a.period === "afternoon" ? "Daytime" : "Evening"} · ${a.pedestrians} pedestrians` : "No observation"}
               </p>
             </article>
           ))}
@@ -203,6 +209,7 @@ const [placed, setPlaced] = useState({
   const [selected, setSelected] = useState(null);
   const [paused, setPaused] = useState(false);
   const [cameraZone, setCameraZone] = useState(null);
+  const [viewReset, setViewReset] = useState(0);
   const [hoveredZone, setHoveredZone] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -263,7 +270,7 @@ const [placed, setPlaced] = useState({
           ? fragment === "moon"
             ? "The evening enters the memorial."
             : "Afternoon light returns."
-          : LABELS[target] + ": observation layer revealed",
+          : LABELS[target] + (placed.sky ? ": observation layer revealed" : " placed. Add the sun or moon to reveal observations."),
       );
     },
     [say, placed.sky],
@@ -302,7 +309,7 @@ const [placed, setPlaced] = useState({
         id: Date.now(),
         url,
         zone: cameraZone,
-        period,
+        period: placed.sky ? period : null,
         pedestrians,
       },
     ]);
@@ -343,6 +350,8 @@ const [placed, setPlaced] = useState({
             placed={placed}
             period={period}
             paused={preview || paused}
+            interactive={!preview}
+            viewReset={viewReset}
             cameraZone={cameraZone}
             overlays={overlays}
             guideActive={guideActive}
@@ -374,6 +383,7 @@ const [placed, setPlaced] = useState({
                 {hoveredZone === id && <ZoneStats
                   id={id}
                   period={period}
+                  hasObservation={placed.sky}
                   anchorRef={anchor("stats:" + id)}
                 />}
                 <button
@@ -410,6 +420,9 @@ const [placed, setPlaced] = useState({
                 });
                 setTimeFrag(null);
                 setSelected(null);
+                setCameraZone(null);
+                setHoveredZone(null);
+                setViewReset(value => value + 1);
                 say("The moment begins again.");
               }}
             >
@@ -483,7 +496,7 @@ const [placed, setPlaced] = useState({
           <div className="viewfinder" />
           <div className="viewer-top">
             <b>{ZONENAMES[cameraZone]}</b>
-            <span>{period} · frame a moment</span>
+            <span>{placed.sky ? period : "No observation"} · frame a moment</span>
           </div>
           <div className="viewer-controls">
             <button className="viewer-back" onClick={() => setCameraZone(null)}>

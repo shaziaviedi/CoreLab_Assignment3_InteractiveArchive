@@ -90,8 +90,9 @@ export function UploadedSkyline({ night }) {
     const count=SKYLINE_COUNT;
     for(let i=0;i<count+(oneWTC ? 1 : 0);i++) {
       const landmark=i===count;
-      const library=libraries[i%2];
-      const scene=(landmark ? oneWTC : library[Math.floor(i/2)%library.length]).clone(true);
+      const {angle,position,variantIndex}=skylinePosition(Math.min(i,count-1));
+      const library=libraries[variantIndex%2];
+      const scene=(landmark ? oneWTC : library[Math.floor(variantIndex/2)%library.length]).clone(true);
       scene.traverse(node=>{
         if(!node.isMesh)return;
         if (landmark) {
@@ -145,12 +146,11 @@ export function UploadedSkyline({ night }) {
       });
       const box=new THREE.Box3().setFromObject(scene),size=box.getSize(new THREE.Vector3());
       const center=box.getCenter(new THREE.Vector3());
-      const random=Math.sin(i*127.1)*43758.5;
+      const random=Math.sin(variantIndex*127.1)*43758.5;
       const height=11+(random-Math.floor(random))*7;
       const factor=landmark ? 28/size.y : Math.min(5.4/Math.max(size.x,size.z),height/size.y);
       scene.scale.setScalar(factor);
       scene.position.set(-center.x*factor,-box.min.y*factor,-center.z*factor);
-      const {angle,position}=skylinePosition(Math.min(i,count-1));
       const group=new THREE.Group();
       if (landmark) {
         // northwest of the North Pool, as in the supplied map

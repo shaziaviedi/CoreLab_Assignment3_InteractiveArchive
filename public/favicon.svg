@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Elsewhere</title>
+  <defs>
+    <linearGradient id="dusk" x2="0" y2="1">
+      <stop stop-color="#424b74"/>
+      <stop offset="1" stop-color="#827090"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#dusk)"/>
+  <path transform="translate(8 9) scale(2)" d="M9 7H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-2a2 2 0 0 1 0-4h2V9a2 2 0 0 0-2-2h-3V5a3 3 0 0 0-6 0Z" fill="none" stroke="#fff5ef" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -15,6 +15,7 @@
 
 - **`src/World3D.jsx` assembles and controls the 3D scene.**
   - Positions the objects, controls the camera, and manages day/night transitions.
+  - Drag to rotate the map, scroll or pinch to zoom toward an area, and right-drag or Shift-drag to pan. Photo viewpoints keep their preset framing.
   - Receives information from `App.jsx` through **props**—information passed from a parent component to a child.
 
 - **Separate files under `src` handle the scene's objects.**
@@ -51,6 +52,7 @@
   - The user places a fragment.
   - `App.jsx` updates its state.
   - Updated props reach `World3D.jsx`.
+  - Area fragments place their objects first; pedestrians and observation data appear once the sun or moon is placed.
   - The scene changes to match.
 
 - **`useFrame` handles continuous animation.**

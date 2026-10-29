@@ -691,7 +691,7 @@ function People({ placed, period, paused }) {
   return (
     <group>
       {["north", "tree", "street"].map((zone) =>
-        Array.from({ length: placed[zone] ? d[zone].crossings + d[zone].stops : 0 }, (_, i) => (
+        Array.from({ length: placed.sky && placed[zone] ? d[zone].crossings + d[zone].stops : 0 }, (_, i) => (
           <Person
             key={zone + i}
             zone={zone}
@@ -711,12 +711,101 @@ const BASE_FOV = 42,
   MAX_FOV = 75,
   FIT_ASPECT = 1.3;
 const deg = THREE.MathUtils.degToRad;
-function Rig({ cameraZone }) {
-  const { camera } = useThree();
+function Rig({ cameraZone, interactive, viewReset }) {
+  const { camera, gl } = useThree();
+  const orbit=useRef({yaw:0,pitch:0,zoom:1,focus:new THREE.Vector3(...OVERVIEW.target)});
+  const spherical=useMemo(()=>new THREE.Spherical(),[]);
+  useEffect(()=>{
+    Object.assign(orbit.current,{yaw:0,pitch:0,zoom:1});
+    orbit.current.focus.set(...OVERVIEW.target);
+  },[viewReset]);
+  useEffect(()=>{
+    const canvas=gl.domElement;
+    if(cameraZone || !interactive)return;
+    const pointers=new Map();
+    const oldCursor=canvas.style.cursor,oldTouch=canvas.style.touchAction;
+    canvas.style.cursor="grab";canvas.style.touchAction="none";
+    const clamp=THREE.MathUtils.clamp;
+    const raycaster=new THREE.Raycaster();
+    const ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+    const cursor=new THREE.Vector2();
+    const groundAt=(x,y)=>{
+      const rect=canvas.getBoundingClientRect();
+      cursor.set((x-rect.left)/rect.width*2-1,1-(y-rect.top)/rect.height*2);
+      raycaster.setFromCamera(cursor,camera);
+      return raycaster.ray.intersectPlane(ground,new THREE.Vector3());
+    };
+    const limitFocus=()=>{
+      const focus=orbit.current.focus;
+      focus.x=clamp(focus.x,-48,48);focus.z=clamp(focus.z,-48,38);focus.y=clamp(focus.y,0,8);
+    };
+    const zoomAt=(factor,x,y)=>{
+      const state=orbit.current;
+      const next=clamp(state.zoom*factor,.12,1.25);
+      const anchor=groundAt(x,y);
+      if(anchor)state.focus.addScaledVector(anchor.sub(state.focus),1-next/state.zoom);
+      state.zoom=next;limitFocus();
+    };
+    const pan=(from,to)=>{
+      const a=groundAt(from.x,from.y),b=groundAt(to.x,to.y);
+      if(a&&b){orbit.current.focus.addScaledVector(a.sub(b),.75);limitFocus();}
+    };
+    const distance=()=>{const [a,b]=[...pointers.values()];return Math.hypot(a.x-b.x,a.y-b.y);};
+    const midpoint=()=>{const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};};
+    const down=e=>{
+      if(e.button!==0 && e.button!==2)return;
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey});
+      canvas.setPointerCapture(e.pointerId);canvas.style.cursor="grabbing";
+    };
+    const move=e=>{
+      const previous=pointers.get(e.pointerId);if(!previous)return;
+      const before=pointers.size===2 ? distance() : 0;
+      const oldCenter=pointers.size===2 ? midpoint() : null;
+      const next={x:e.clientX,y:e.clientY,pan:previous.pan};
+      pointers.set(e.pointerId,next);
+      if(pointers.size===2){
+        const after=distance(),center=midpoint();
+        pan(oldCenter,center);
+        if(before>0 && after>0)zoomAt(Math.pow(before/after,.65),center.x,center.y);
+      } else if(pointers.size===1){
+        if(previous.pan)pan(previous,next);
+        else {
+          orbit.current.yaw=clamp(orbit.current.yaw-(e.clientX-previous.x)*.0012,-.45,.45);
+          orbit.current.pitch=clamp(orbit.current.pitch+(e.clientY-previous.y)*.0009,-.22,.15);
+        }
+      }
+    };
+    const up=e=>{
+      pointers.delete(e.pointerId);
+      if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+      canvas.style.cursor=pointers.size ? "grabbing" : "grab";
+    };
+    const wheel=e=>{
+      e.preventDefault();
+      const delta=e.deltaY*(e.deltaMode===1 ? 16 : e.deltaMode===2 ? canvas.clientHeight : 1);
+      zoomAt(Math.exp(clamp(delta,-180,180)*.00055),e.clientX,e.clientY);
+    };
+    const context=e=>e.preventDefault();
+    canvas.addEventListener("contextmenu",context);
+    canvas.addEventListener("pointerdown",down);
+    canvas.addEventListener("pointermove",move);
+    canvas.addEventListener("pointerup",up);
+    canvas.addEventListener("pointercancel",up);
+    canvas.addEventListener("lostpointercapture",up);
+    canvas.addEventListener("wheel",wheel,{passive:false});
+    return ()=>{
+      canvas.removeEventListener("contextmenu",context);
+      canvas.removeEventListener("pointerdown",down);canvas.removeEventListener("pointermove",move);
+      canvas.removeEventListener("pointerup",up);canvas.removeEventListener("pointercancel",up);
+      canvas.removeEventListener("lostpointercapture",up);canvas.removeEventListener("wheel",wheel);
+      for(const id of pointers.keys())if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);
+      canvas.style.cursor=oldCursor;canvas.style.touchAction=oldTouch;
+    };
+  },[gl,cameraZone,interactive,viewReset]);
   let look = useRef(new THREE.Vector3(...OVERVIEW.target));
   const goal = useMemo(() => new THREE.Vector3(), []);
   const aim = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ pointer }, dt) => {
+  useFrame((_, dt) => {
     const s = (cameraZone && CAMERA_PRESETS[cameraZone]) || OVERVIEW;
     const halfTan =
       Math.tan(deg(BASE_FOV / 2)) * Math.max(1, FIT_ASPECT / camera.aspect);
@@ -726,10 +815,14 @@ function Rig({ cameraZone }) {
     aim.set(...s.target);
     goal.set(...s.pos).sub(aim).multiplyScalar(pullBack).add(aim);
     if (!cameraZone) {
-      goal.x += pointer.x * 1.2;
-      goal.y += pointer.y * .45;
+      spherical.setFromVector3(goal.sub(aim));
+      spherical.theta+=orbit.current.yaw;
+      spherical.phi=THREE.MathUtils.clamp(spherical.phi+orbit.current.pitch,.5,1.35);
+      spherical.radius*=orbit.current.zoom;
+      aim.copy(orbit.current.focus);
+      goal.setFromSpherical(spherical).add(aim);
     }
-    let k = Math.min(1, dt * 1.2);
+    const k = 1-Math.exp(-Math.min(dt,.05)*(cameraZone ? 1.2 : 1.7));
     camera.position.lerp(goal, k);
     look.current.lerp(aim, k);
     camera.lookAt(look.current);
@@ -855,6 +948,8 @@ export default function World3D({
   period,
   paused,
   cameraZone,
+  interactive = true,
+  viewReset = 0,
   overlays,
   guideActive = false,
 }) {
@@ -887,7 +982,7 @@ export default function World3D({
   return (
     <>
       <color attach="background" args={["#a8bad4"]} />
-      <Rig cameraZone={cameraZone} />
+      <Rig cameraZone={cameraZone} interactive={interactive} viewReset={viewReset} />
       <ScreenAnchors overlays={overlays} />
       <Sky blend={blend} daylight={daylight} paused={paused} reducedMotion={reducedMotion} />
       <SunMoon placed={placed.sky} night={period === "evening"} blend={blend} guideActive={guideActive} guidancePulse={guidancePulse} celestial={celestial} />

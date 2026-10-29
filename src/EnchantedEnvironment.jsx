@@ -30,7 +30,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     float blocker=readDepth(sampleUv);
     visibility*=mix(.82,1.,step(depth-.001,blocker));
   }
-  float strength=mix(.022,.075,enchantDay);
+  float strength=mix(.022,.11,enchantDay);
   strength=mix(strength,.025,enchantNight);
   float shafts=bands*cone*visibility*strength*smoothstep(.055,mix(.11,.2,enchantNight),length(ray))*enchantPresence;
 
@@ -40,7 +40,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   edge+=step(depth+.0003,readDepth(clamp(uv+vec2(offset.x,0.),vec2(0.),vec2(1.))));
   edge+=step(depth+.0003,readDepth(clamp(uv+vec2(0.,offset.y),vec2(0.),vec2(1.))));
   edge*=step(depth,.9999);
-  float rim=edge*mix(.012,.022,enchantNight)*enchantPresence;
+  float rim=edge*mix(mix(.012,.035,enchantDay),.022,enchantNight)*enchantPresence;
   vec3 glow=enchantTint*(shafts+rim);
   // Leave the sky gradients and the underlying material hues intact.
   vec3 color=inputColor.rgb+glow*(1.-clamp(inputColor.rgb,0.,1.));
@@ -142,7 +142,7 @@ export function EnchantedDust({ daylight, blend, paused, reducedMotion }) {
     if(!material.current)return;
     if(!paused && !reducedMotion)uniforms.dustTime.value+=Math.min(dt,.05);
     uniforms.dustScale.value=size.height*gl.getPixelRatio()/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
-    uniforms.dustStrength.value=THREE.MathUtils.lerp(THREE.MathUtils.lerp(.43,.36,daylight.current),.65,blend.current);
+    uniforms.dustStrength.value=THREE.MathUtils.lerp(THREE.MathUtils.lerp(.43,.58,daylight.current),.65,blend.current);
     uniforms.dustColor.value.copy(colors[0]).lerp(colors[1],daylight.current).lerp(colors[2],blend.current);
   });
   return <points geometry={geometry} frustumCulled={false}>

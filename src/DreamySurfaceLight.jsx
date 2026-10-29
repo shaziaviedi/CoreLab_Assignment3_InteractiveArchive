@@ -16,7 +16,7 @@ export default function DreamySurfaceLight({ celestial, lightPosition }) {
     const state=celestial.current;
     const altitude=Math.max(state.sun,state.moon);
     const moon=state.moon>state.sun;
-    uniforms.dreamStrength.value=state.to==="none" ? .06 : Math.max(0,(altitude-.2)/.8)*(moon ? .32 : .38);
+    uniforms.dreamStrength.value=state.to==="none" ? .06 : Math.max(0,(altitude-.2)/.8)*(moon ? .32 : .52);
     uniforms.dreamTint.value.copy(colors[moon ? 1 : 0]);
     uniforms.dreamDirection.value.copy(lightPosition);
     uniforms.dreamDirection.value.y-=45*(1-altitude);

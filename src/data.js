@@ -13,7 +13,7 @@ function observationsFor(period) {
     ]));
     return [id, {
       zone, ...counts, durationMinutes: 5, sampleCount: visits.length,
-      summary: visits.length > 1 ? "Daytime average · 2 visits" : "Evening observation",
+      summary: period === "afternoon" ? "Daytime observation" : "Evening observation",
       at: rows.map(row => row.start + "–" + row.end).join(" / "),
       dates: rows.map(row => row.date),
     }];
