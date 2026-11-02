@@ -1,0 +1,160 @@
+/* fragments */
+
+.fragment-dock {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: 3.7%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px 10px;
+  border-radius: 27px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  background: linear-gradient(
+    115deg,
+    rgba(48, 47, 86, 0.44),
+    rgba(78, 65, 107, 0.23)
+  );
+  box-shadow:
+    0 18px 65px rgba(40, 32, 82, 0.19),
+    inset 0 1px rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(23px) saturate(1.35);
+  -webkit-backdrop-filter: blur(23px) saturate(1.35);
+  max-width: 92vw;
+}
+.dock-sub {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  line-height: 1.6;
+  opacity: 0.72;
+  width: 77px;
+  white-space: nowrap;
+  text-align: left;
+}
+.dock-sub b {
+  font-size: 11px;
+  display: block;
+  letter-spacing: 0.12em;
+  font-weight: 400;
+  opacity: 1;
+}
+.piece {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3px 4px;
+  border-radius: 16px;
+  gap: 4px;
+  cursor: grab;
+  min-width: 64px;
+  transition:
+    transform 0.2s,
+    background 0.2s,
+    border 0.2s;
+}
+.piece:hover,
+.piece.chosen {
+  transform: translateY(-7px);
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+.piece.placed {
+  opacity: 0.6;
+}
+.piece-label {
+  text-transform: uppercase;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  color: #fff;
+  text-shadow: 0 1px 8px #282448;
+}
+.fragment-art {
+  width: 51px;
+  height: 53px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 4px 10px #24264c80);
+}
+.fragment-art svg {
+  height: 50px;
+  width: 50px;
+  overflow: visible;
+}
+.piece .fragment-art img {
+  max-width: 100%;
+  max-height: 100%;
+}
+.dock-divider {
+  height: 48px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.27);
+}
+.slot {
+  position: absolute;
+  z-index: 12;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  border-radius: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.8);
+  transition: background 0.2s;
+}
+.slot,
+.slot:hover,
+.slot.dragover,
+.slot:focus-visible {
+  background: transparent;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+.slot .slot-inner {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  opacity: 0.78;
+  position: absolute;
+  top: calc(100% + 11px);
+  white-space: nowrap;
+  text-shadow: 0 1px 10px #303353;
+}
+.slot.filled {
+  opacity: 0;
+  pointer-events: none;
+}
+.slot.sky {
+  width: 95px;
+  height: 95px;
+}
+.slot.north {
+  width: 130px;
+  height: 90px;
+  border-radius: 18px;
+}
+.slot.tree {
+  width: 77px;
+  height: 95px;
+  border-radius: 48%;
+}
+.slot.street {
+  width: 74px;
+  height: 58px;
+  border-radius: 15px;
+}
+.slot .slot-icon {
+  font-size: 27px;
+  opacity: 0.75;
+}

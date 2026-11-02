@@ -1,0 +1,119 @@
+/* observations */
+
+.pin {
+  position: absolute;
+  z-index: 15;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  color: #fff;
+  box-shadow: 0 0 25px #fce8ff70;
+  background: rgba(49, 46, 88, 0.36);
+  backdrop-filter: blur(10px);
+  border-radius: 50%;
+  width: 33px;
+  height: 33px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: 0.2s;
+}
+.pin:hover {
+  transform: translate(-50%, -50%) scale(1.14);
+}
+.data-popup {
+  position: absolute;
+  z-index: 16;
+  min-width: 178px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(34, 36, 74, 0.47);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 10px 34px rgba(32, 31, 72, 0.14);
+  pointer-events: none;
+  animation: riseIn 0.8s both;
+}
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.data-popup label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.19em;
+  font-size: 9px;
+  opacity: 0.8;
+  margin-bottom: 9px;
+}
+.data-numbers {
+  display: flex;
+  gap: 15px;
+  align-items: end;
+}
+.data-numbers strong {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 400;
+  font-size: 27px;
+  line-height: 1;
+}
+.data-numbers span {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  opacity: 0.85;
+}
+.data-popup .camera-num {
+  border-top: 1px solid rgba(255, 255, 255, 0.27);
+  margin-top: 7px;
+  padding-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+}
+.data-popup .camera-num b {
+  font-weight: 500;
+  font-size: 12px;
+}
+@keyframes showPopup {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.flash {
+  position: absolute;
+  z-index: 12;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 7px #fffded65,
+    0 0 35px 18px #fff8cc6b;
+  animation: flash 0.46s both;
+}
+@keyframes flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  27% {
+    opacity: 1;
+    transform: scale(1.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3);
+  }
+}

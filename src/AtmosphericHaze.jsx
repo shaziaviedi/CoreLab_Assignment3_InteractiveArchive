@@ -4,26 +4,37 @@ import { Effect, EffectAttribute, BlendFunction } from "postprocessing";
 import { Uniform, Vector3, Matrix4 } from "three";
 import { SKYLINE_COUNT, skylinePosition } from "./SkylineLayout.js";
 
-// project the actual curved plaza edge, so the pink band stays above the paving
+// projected plaza edge for the haze band
 export function useSkyHorizon() {
-  const horizon = useMemo(() => new Float32Array(33).fill(.5), []);
-  const points = useMemo(() => Array.from({length: 129}, (_, i) => new Vector3(
-    Math.cos(i / 128 * Math.PI) * 48, 0, -2 - Math.sin(i / 128 * Math.PI) * 48
-  )), []);
+  const horizon = useMemo(() => new Float32Array(33).fill(0.5), []);
+  const points = useMemo(
+    () =>
+      Array.from(
+        { length: 129 },
+        (_, i) =>
+          new Vector3(
+            Math.cos((i / 128) * Math.PI) * 48,
+            0,
+            -2 - Math.sin((i / 128) * Math.PI) * 48,
+          ),
+      ),
+    [],
+  );
   const projected = useMemo(() => points.map(() => new Vector3()), [points]);
   useFrame(({ camera }) => {
     points.forEach((point, i) => projected[i].copy(point).project(camera));
     for (let column = 0; column < 33; column++) {
-      const x = column / 32 * 2 - 1;
+      const x = (column / 32) * 2 - 1;
       let top = -1;
       for (let i = 0; i < projected.length - 1; i++) {
-        const a = projected[i], b = projected[i + 1];
+        const a = projected[i],
+          b = projected[i + 1];
         if ((a.x <= x && b.x >= x) || (b.x <= x && a.x >= x)) {
-          const t = (x - a.x) / (b.x - a.x || .00001);
+          const t = (x - a.x) / (b.x - a.x || 0.00001);
           top = Math.max(top, (a.y + (b.y - a.y) * t + 1) / 2);
         }
       }
-      horizon[column] = Math.min(.88, Math.max(.08, top));
+      horizon[column] = Math.min(0.88, Math.max(0.08, top));
     }
   });
   return horizon;
@@ -88,7 +99,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   viewPoint/=viewPoint.w;
   vec3 worldPoint=(hazeCameraWorld*viewPoint).xyz;
   float height=max(0.,worldPoint.y);
-  // Blend the building feet and gaps behind them along the actual skyline.
+  // skyline seam, including building gaps
   float radius=length(worldPoint.xz-vec2(0.,2.));
   float cityRing=smoothstep(30.,37.,radius)*(1.-smoothstep(51.,59.,radius));
   float outerCity=max(abs(worldPoint.x+2.)-24.,abs(worldPoint.z)-25.);
@@ -109,7 +120,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   vec3 dayHaze=linearRGB(vec3(.40,.56,.74));
   borderColor=mix(borderColor,dayHaze,uDay*(1.-uNight)*(1.-skyPixel)*.7);
   vec3 color=mix(inputColor.rgb,borderColor,haze);
-  // Dissolve the actual paving edge into the sky, including gaps between buildings.
+  // soften the projected paving edge
   float groundRadius=length(worldPoint.xz-vec2(0.,-2.));
   float edgeFade=smoothstep(39.,48.,groundRadius);
   float edgeBand=exp(-pow((uv.y-skyEdge(uv.x))/mix(.045,.075,cloud),2.));
@@ -120,45 +131,72 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   outputColor=vec4(color,inputColor.a);
 }`;
 
-export default function AtmosphericHaze({ daylight, blend, paused, reducedMotion }) {
+export default function AtmosphericHaze({
+  daylight,
+  blend,
+  paused,
+  reducedMotion,
+}) {
   const horizon = useSkyHorizon();
-  const seam = useMemo(()=>new Float32Array(33).fill(.45),[]);
-  const cityPoints=useMemo(()=>Array.from({length:SKYLINE_COUNT},(_,i)=>new Vector3(...skylinePosition(i).position)),[]);
-  const projectedCity=useMemo(()=>cityPoints.map(()=>new Vector3()),[cityPoints]);
-  const effect = useMemo(() => new Effect("AtmosphericHaze", fragment, {
-    blendFunction: BlendFunction.NORMAL,
-    attributes: EffectAttribute.DEPTH,
-    uniforms: new Map([
-      ["skyHorizon", new Uniform(horizon)],
-      ["citySeam", new Uniform(seam)],
-      ["mistTime", new Uniform(0)],
-      ["uDay", new Uniform(0)], ["uNight", new Uniform(0)],
-      ["uNear", new Uniform(.1)], ["uFar", new Uniform(280)],
-      ["hazeInverseProjection", new Uniform(new Matrix4())],
-      ["hazeCameraWorld", new Uniform(new Matrix4())],
-    ]),
-  }), [horizon, seam]);
-  useFrame(({ camera },dt) => {
-    if(!paused && !reducedMotion)effect.uniforms.get("mistTime").value+=Math.min(dt,.05);
-    cityPoints.forEach((point,i)=>projectedCity[i].copy(point).project(camera));
-    for(let column=0;column<33;column++){
-      const x=column/32*2-1;
-      let top=-1;
-      for(let i=0;i<projectedCity.length-1;i++){
-        const a=projectedCity[i],b=projectedCity[i+1];
-        if(a.z>1 || b.z>1)continue;
-        if((a.x<=x && b.x>=x)||(b.x<=x && a.x>=x)){
-          const t=(x-a.x)/(b.x-a.x || .00001);
-          top=Math.max(top,(a.y+(b.y-a.y)*t+1)/2);
+  const seam = useMemo(() => new Float32Array(33).fill(0.45), []);
+  const cityPoints = useMemo(
+    () =>
+      Array.from(
+        { length: SKYLINE_COUNT },
+        (_, i) => new Vector3(...skylinePosition(i).position),
+      ),
+    [],
+  );
+  const projectedCity = useMemo(
+    () => cityPoints.map(() => new Vector3()),
+    [cityPoints],
+  );
+  const effect = useMemo(
+    () =>
+      new Effect("AtmosphericHaze", fragment, {
+        blendFunction: BlendFunction.NORMAL,
+        attributes: EffectAttribute.DEPTH,
+        uniforms: new Map([
+          ["skyHorizon", new Uniform(horizon)],
+          ["citySeam", new Uniform(seam)],
+          ["mistTime", new Uniform(0)],
+          ["uDay", new Uniform(0)],
+          ["uNight", new Uniform(0)],
+          ["uNear", new Uniform(0.1)],
+          ["uFar", new Uniform(280)],
+          ["hazeInverseProjection", new Uniform(new Matrix4())],
+          ["hazeCameraWorld", new Uniform(new Matrix4())],
+        ]),
+      }),
+    [horizon, seam],
+  );
+  useFrame(({ camera }, dt) => {
+    if (!paused && !reducedMotion)
+      effect.uniforms.get("mistTime").value += Math.min(dt, 0.05);
+    cityPoints.forEach((point, i) =>
+      projectedCity[i].copy(point).project(camera),
+    );
+    for (let column = 0; column < 33; column++) {
+      const x = (column / 32) * 2 - 1;
+      let top = -1;
+      for (let i = 0; i < projectedCity.length - 1; i++) {
+        const a = projectedCity[i],
+          b = projectedCity[i + 1];
+        if (a.z > 1 || b.z > 1) continue;
+        if ((a.x <= x && b.x >= x) || (b.x <= x && a.x >= x)) {
+          const t = (x - a.x) / (b.x - a.x || 0.00001);
+          top = Math.max(top, (a.y + (b.y - a.y) * t + 1) / 2);
         }
       }
-      seam[column]=top;
+      seam[column] = top;
     }
     effect.uniforms.get("uDay").value = daylight.current;
     effect.uniforms.get("uNight").value = blend.current;
     effect.uniforms.get("uNear").value = camera.near;
     effect.uniforms.get("uFar").value = camera.far;
-    effect.uniforms.get("hazeInverseProjection").value.copy(camera.projectionMatrixInverse);
+    effect.uniforms
+      .get("hazeInverseProjection")
+      .value.copy(camera.projectionMatrixInverse);
     effect.uniforms.get("hazeCameraWorld").value.copy(camera.matrixWorld);
   });
   useEffect(() => () => effect.dispose(), [effect]);

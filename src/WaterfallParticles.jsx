@@ -37,42 +37,58 @@ void main() {
 export default function WaterfallParticles({ night }) {
   const material = useRef();
   const geometry = useMemo(() => {
-    const count=6400;
-    const positions=new Float32Array(count*3);
-    const phases=new Float32Array(count);
-    const rand=(i)=>{const x=Math.sin(i*127.1+31.7)*43758.5453;return x-Math.floor(x);};
-    for(let i=0;i<count;i++) {
-      const side=i%4;
-      const inner=i>=5600;
-      // Keep the streams on the basin side of the imported wall faces.
-      const edge=inner ? .76 : side<2 ? 3.44 : 3.33;
-      const along=(rand(i+1)*2-1)*(inner ? .72 : 3.28);
-      positions[i*3]=side<2 ? (side===0 ? -edge : edge) : along;
-      positions[i*3+1]=rand(i+71);
-      positions[i*3+2]=side<2 ? along : (side===2 ? -edge : edge);
-      phases[i]=rand(i+137);
+    const count = 6400;
+    const positions = new Float32Array(count * 3);
+    const phases = new Float32Array(count);
+    const rand = (i) => {
+      const x = Math.sin(i * 127.1 + 31.7) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    for (let i = 0; i < count; i++) {
+      const side = i % 4;
+      const inner = i >= 5600;
+      // streams inside the imported basin walls
+      const edge = inner ? 0.76 : side < 2 ? 3.44 : 3.33;
+      const along = (rand(i + 1) * 2 - 1) * (inner ? 0.72 : 3.28);
+      positions[i * 3] = side < 2 ? (side === 0 ? -edge : edge) : along;
+      positions[i * 3 + 1] = rand(i + 71);
+      positions[i * 3 + 2] = side < 2 ? along : side === 2 ? -edge : edge;
+      phases[i] = rand(i + 137);
     }
-    const g=new THREE.BufferGeometry();
-    g.setAttribute("position",new THREE.BufferAttribute(positions,3));
-    g.setAttribute("phase",new THREE.BufferAttribute(phases,1));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setAttribute("phase", new THREE.BufferAttribute(phases, 1));
     return g;
   }, []);
-  const uniforms=useMemo(()=>({
-    time:{value:0}, screenScale:{value:1000},
-    waterColor:{value:new THREE.Color("#9edce9")},
-  }),[]);
-  useEffect(()=>{
+  const uniforms = useMemo(
+    () => ({
+      time: { value: 0 },
+      screenScale: { value: 1000 },
+      waterColor: { value: new THREE.Color("#9edce9") },
+    }),
+    [],
+  );
+  useEffect(() => {
     uniforms.waterColor.value.set(night ? "#9dbde9" : "#9edce9");
-  },[night,uniforms]);
-  useFrame(({gl,camera,size,clock})=>{
-    if(!material.current) return;
-    material.current.uniforms.time.value=clock.elapsedTime;
-    material.current.uniforms.screenScale.value=size.height*gl.getPixelRatio()/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
+  }, [night, uniforms]);
+  useFrame(({ gl, camera, size, clock }) => {
+    if (!material.current) return;
+    material.current.uniforms.time.value = clock.elapsedTime;
+    material.current.uniforms.screenScale.value =
+      (size.height * gl.getPixelRatio()) /
+      (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   });
   return (
     <points geometry={geometry} frustumCulled={false}>
-      <shaderMaterial ref={material} uniforms={uniforms} vertexShader={vertex}
-        fragmentShader={fragment} transparent depthWrite={false} toneMapped={false} />
+      <shaderMaterial
+        ref={material}
+        uniforms={uniforms}
+        vertexShader={vertex}
+        fragmentShader={fragment}
+        transparent
+        depthWrite={false}
+        toneMapped={false}
+      />
     </points>
   );
 }

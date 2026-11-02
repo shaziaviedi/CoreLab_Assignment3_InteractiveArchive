@@ -1,0 +1,93 @@
+/* responsive */
+
+@media (max-width: 760px) {
+  .corner-notation {
+    top: 3.4%;
+    left: 5%;
+  }
+  .status-pill {
+    top: 3%;
+    right: 4%;
+    font-size: 8px;
+  }
+  .scene-caption {
+    left: 5%;
+    bottom: 23%;
+    font-size: 17px;
+  }
+  .hint {
+    bottom: 23%;
+    font-size: 8px;
+  }
+  .fragment-dock {
+    bottom: 4%;
+    gap: 4px;
+    max-width: 97vw;
+    padding: 8px 7px;
+  }
+  .dock-sub {
+    display: none;
+  }
+  .dock-divider {
+    display: none;
+  }
+  .piece {
+    min-width: 44px;
+    padding: 1px;
+  }
+  .fragment-art {
+    width: 43px;
+    height: 44px;
+  }
+  .fragment-art svg {
+    width: 41px;
+    height: 41px;
+  }
+  .piece-label {
+    font-size: 7px;
+  }
+  .actions {
+    right: 4%;
+    top: calc(3% + 40px);
+  }
+  .data-popup {
+    min-width: 120px;
+    padding: 8px 10px;
+  }
+  .data-numbers strong {
+    font-size: 20px;
+  }
+  .slot.sky {
+    width: 59px;
+    height: 59px;
+  }
+  .slot.north,
+  .slot.tree,
+  .slot.street {
+    width: 45px;
+    height: 50px;
+  }
+  .slot .slot-inner {
+    font-size: 7px;
+  }
+  .slot .slot-icon {
+    font-size: 18px;
+  }
+  .viewer-top b {
+    font-size: 24px;
+  }
+  .viewer-layout {
+    padding-left: 9%;
+    padding-right: 9%;
+  }
+  .archive-open {
+    bottom: 23%;
+    left: 5%;
+  }
+  .archive-item {
+    flex-basis: min(400px, 84vw);
+  }
+  .mark-water {
+    display: none;
+  }
+}

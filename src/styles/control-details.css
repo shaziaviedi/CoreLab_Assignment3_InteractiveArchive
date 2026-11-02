@@ -1,0 +1,128 @@
+/* control details */
+
+.scene-intro .piece-label {
+  color: #f0f5ff;
+  text-shadow: 0 1px 3px #31456966;
+}
+.scene-intro .piece:hover,
+.scene-intro .piece.chosen {
+  background: #d9ebff22;
+  border-color: #d4e7ff88;
+}
+.scene-intro .fragment-dock {
+  scrollbar-width: thin;
+  scrollbar-color: #c5d8ed66 transparent;
+}
+
+.puzzle-toggle:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.fragment-menu::after {
+  content: "";
+  position: absolute;
+  left: 80px;
+  top: 17px;
+  bottom: 17px;
+  width: 1px;
+  background: rgba(232, 226, 245, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.fragment-menu.is-open::after {
+  opacity: 1;
+}
+.fragment-menu:has(.puzzle-toggle:focus-visible) {
+  border-color: #e8e2f5;
+}
+
+/* solid borders prevent scenery tint */
+.button-circle,
+.fragment-menu {
+  border: 1px solid #bdbbcd;
+  background-clip: padding-box;
+}
+
+.fragment-menu.is-guided {
+  animation: guidance-pulse 1.8s ease-in-out infinite;
+}
+@keyframes guidance-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px #e5d9b926,
+      0 0 18px #e5d9b914;
+  }
+  50% {
+    box-shadow:
+      0 0 16px #e5d9b970,
+      0 0 36px #e5d9b935;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fragment-menu.is-guided {
+    animation: none;
+    box-shadow: 0 0 12px #e5d9b94d;
+  }
+}
+
+.slot.sky.filled {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pin {
+  padding: 0;
+  line-height: 0;
+}
+.pin svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.data-summary {
+  display: block;
+  margin: 5px 0 10px;
+  color: #e6deee;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+.fragment-art {
+  user-select: none;
+  background: transparent;
+}
+.fragment-art svg,
+.fragment-art img {
+  pointer-events: none;
+}
+
+.scene-intro .piece {
+  display: grid;
+  grid-template-rows: 43px 12px;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+}
+.scene-intro .fragment-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.scene-intro .fragment-art {
+  filter: none;
+}
+.scene-intro .piece-label {
+  width: 100%;
+  line-height: 12px;
+  text-align: center;
+  color: #d5d1dd;
+  text-shadow: none;
+}
+.puzzle-toggle svg {
+  width: 32px;
+  height: 32px;
+}

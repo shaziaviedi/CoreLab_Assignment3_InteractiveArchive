@@ -1,0 +1,177 @@
+/* scene */
+
+.app {
+  position: fixed;
+  inset: 0;
+  background: #6b709e;
+  overflow: hidden;
+}
+.three-stage,
+.sky-layer,
+.scene-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.three-stage > div {
+  width: 100%;
+  height: 100%;
+}
+.sky-layer {
+  filter: saturate(1.1);
+}
+.scene-layer {
+  filter: contrast(1.04) saturate(1.09);
+}
+.film-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.25;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.15'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 69% 58% at 48% 45%,
+    transparent 47%,
+    rgba(39, 34, 75, 0.12) 88%,
+    rgba(20, 24, 52, 0.35)
+  );
+}
+.app:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(33, 29, 75, 0.02) 68%,
+    rgba(26, 26, 59, 0.29) 100%
+  );
+}
+.corner-notation {
+  position: absolute;
+  z-index: 10;
+  left: 3.8%;
+  top: 5.2%;
+  color: rgba(255, 255, 255, 0.91);
+  text-shadow: 0 1px 12px #46507570;
+  letter-spacing: 0.23em;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
+}
+.corner-notation b {
+  display: block;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(32px, 3.2vw, 48px);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.065em;
+  text-transform: none;
+  margin-bottom: 8px;
+}
+.corner-notation span {
+  display: block;
+  opacity: 0.75;
+  font-size: 9px;
+  letter-spacing: 0.21em;
+}
+.scene-caption {
+  position: absolute;
+  left: 3.8%;
+  bottom: 18.4%;
+  z-index: 10;
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic;
+  color: #fff;
+  font-size: clamp(15px, 1.6vw, 22px);
+  text-shadow: 0 2px 15px #403b67a3;
+  pointer-events: none;
+  max-width: 310px;
+}
+.scene-caption small {
+  display: block;
+  margin-top: 10px;
+  font:
+    400 9px "Jost",
+    sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+.status-pill {
+  position: absolute;
+  right: 3.6%;
+  top: 5%;
+  z-index: 11;
+  background: rgba(25, 30, 57, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 8px 14px;
+  border-radius: 50px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+.status-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffe7ae;
+  box-shadow: 0 0 12px #fff5cc;
+}
+.button-circle {
+  width: 36px;
+  height: 36px;
+  background: rgba(40, 38, 78, 0.23);
+  color: #fff;
+  border-radius: 50%;
+  backdrop-filter: blur(13px);
+  -webkit-backdrop-filter: blur(13px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 17px;
+  transition: 0.25s;
+}
+.button-circle:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+.actions {
+  position: absolute;
+  right: 3.6%;
+  top: calc(5% + 48px);
+  z-index: 11;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+}
+.hint {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: 19.5%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: #fff;
+  opacity: 0.84;
+  text-shadow: 0 2px 14px #232244;
+  white-space: nowrap;
+  pointer-events: none;
+}

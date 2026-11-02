@@ -2,19 +2,33 @@ import React, { Suspense, useMemo, useRef, useEffect } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
-import AtmosphericHaze, { skyColors, useSkyHorizon } from "./AtmosphericHaze.jsx";
+import AtmosphericHaze, { useSkyHorizon } from "./AtmosphericHaze.jsx";
 import AnimatedVisitor from "./AnimatedVisitor.jsx";
 import DreamySurfaceLight from "./DreamySurfaceLight.jsx";
 import { EnchantedAtmosphere, EnchantedDust } from "./EnchantedEnvironment.jsx";
 import { pedestrianRoute, stoppedPositions } from "./PedestrianPaths.js";
 import ParkLawns from "./ParkLawns.jsx";
 import { UploadedOculus, UploadedSkyline } from "./UploadedArchitecture.jsx";
-import { PastelSun, MoonGlow, moonVertex, moonFragment } from "./CelestialModels.jsx";
+import {
+  PastelSun,
+  MoonGlow,
+  moonVertex,
+  moonFragment,
+} from "./CelestialModels.jsx";
 import ReferencePool from "./ReferencePool.jsx";
 import ReferenceMuseum from "./ReferenceMuseum.jsx";
 import TexturedTree from "./TexturedTree.jsx";
+import {
+  skyVert,
+  skyFrag,
+  waterVert,
+  waterFrag,
+  fallVert,
+  fallFrag,
+} from "./SceneShaders.js";
 import { OBS } from "./data.js";
 
+// layout and seeded planting
 const PI = Math.PI,
   TAU = PI * 2;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -34,23 +48,41 @@ const CROSSWALK_Z = 1;
 const OCULUS = [27.6, 0.05, -8];
 const SKY_NDC = [0.42, 0.66];
 const SKY_DISTANCE = 60;
-// fixed world location: camera movement must not drag the celestial bodies along
+// fixed celestial position across camera moves
 const CELESTIAL_TOP = (() => {
-  const camera=new THREE.PerspectiveCamera(42,1.8,.1,280);
-  camera.position.set(...OVERVIEW.pos);camera.lookAt(...OVERVIEW.target);camera.updateMatrixWorld();
-  return new THREE.Vector3(SKY_NDC[0],SKY_NDC[1],.5).unproject(camera)
-    .sub(camera.position).normalize().multiplyScalar(SKY_DISTANCE).add(camera.position);
+  const camera = new THREE.PerspectiveCamera(42, 1.8, 0.1, 280);
+  camera.position.set(...OVERVIEW.pos);
+  camera.lookAt(...OVERVIEW.target);
+  camera.updateMatrixWorld();
+  return new THREE.Vector3(SKY_NDC[0], SKY_NDC[1], 0.5)
+    .unproject(camera)
+    .sub(camera.position)
+    .normalize()
+    .multiplyScalar(SKY_DISTANCE)
+    .add(camera.position);
 })();
 
 const ANCHORS = {
-  north: { at: [NORTH_POOL[0], 0.5, NORTH_POOL[2]], pin: [NORTH_POOL[0], .1, NORTH_POOL[2] + 8], card: "left" },
-  tree: { at: [SURVIVOR_TREE[0], 4.4, SURVIVOR_TREE[2]], pin: [SURVIVOR_TREE[0], .1, SURVIVOR_TREE[2] + 2], card: "above" },
-  street: { at: [STREET_X, 0.1, CROSSWALK_Z], pin: [STREET_X, .1, CROSSWALK_Z + 3.5], card: "right" },
+  north: {
+    at: [NORTH_POOL[0], 0.5, NORTH_POOL[2]],
+    pin: [NORTH_POOL[0], 0.1, NORTH_POOL[2] + 8],
+    card: "left",
+  },
+  tree: {
+    at: [SURVIVOR_TREE[0], 4.4, SURVIVOR_TREE[2]],
+    pin: [SURVIVOR_TREE[0], 0.1, SURVIVOR_TREE[2] + 2],
+    card: "above",
+  },
+  street: {
+    at: [STREET_X, 0.1, CROSSWALK_Z],
+    pin: [STREET_X, 0.1, CROSSWALK_Z + 3.5],
+    card: "right",
+  },
 };
 const CAMERA_PRESETS = {
   north: { pos: [1, 2.7, -2], target: [-6.42, 0, -9.93] },
   tree: { pos: [-8.5, 2.1, 18.5], target: [-3, 1.6, 9.92] },
-  street: { pos: [18, 1.75, 9], target: [16.5, .9, -6] },
+  street: { pos: [18, 1.75, 9], target: [16.5, 0.9, -6] },
 };
 
 const inBox = (x, z, c, r) => Math.abs(x - c[0]) < r && Math.abs(z - c[2]) < r;
@@ -65,134 +97,135 @@ function nearSightline(x, z, { pos, target }) {
   return Math.hypot(x - pos[0] - t * dx, z - pos[2] - t * dz) < 2.2;
 }
 function inClearing(x, z) {
-  return x > 13 ||
-    inBox(x, z, NORTH_POOL, 7.6) || inBox(x, z, SOUTH_POOL, 7.6) ||
+  return (
+    x > 13 ||
+    inBox(x, z, NORTH_POOL, 7.6) ||
+    inBox(x, z, SOUTH_POOL, 7.6) ||
     (x > 0 && x < 14 && z > -8 && z < 2) ||
     Math.hypot(x - SURVIVOR_TREE[0], z - SURVIVOR_TREE[2]) < 3 ||
-    Object.values(CAMERA_PRESETS).some((p) => nearSightline(x, z, p));
+    Object.values(CAMERA_PRESETS).some((p) => nearSightline(x, z, p))
+  );
 }
 const GROVE = [];
 for (let row = 0; row < 9; row++)
   for (let col = 0; col < 8; col++) {
-    const x = -18 + col * 3.1, z = -17 + row * 3.6;
+    const x = -18 + col * 3.1,
+      z = -17 + row * 3.6;
     if (!inClearing(x, z)) GROVE.push([x, z]);
   }
-// spread new trees around the park edges rather than packing the existing grove
+// extra planting along park edges
 const extraPlanting = [
-  [-14, -20], [3, -20], [10.4, -15.8],
-  [7.5, -13], [11.5, -9],
-  [-12, 19.5], [-4, 19.5], [4, 19], [11, 19],
+  [-14, -20],
+  [3, -20],
+  [10.4, -15.8],
+  [7.5, -13],
+  [11.5, -9],
+  [-12, 19.5],
+  [-4, 19.5],
+  [4, 19],
+  [11, 19],
 ];
 for (const [x, z] of extraPlanting) {
-  if (!inClearing(x, z) && GROVE.every(([gx, gz]) => Math.hypot(gx - x, gz - z) > 4.2)) {
+  if (
+    !inClearing(x, z) &&
+    GROVE.every(([gx, gz]) => Math.hypot(gx - x, gz - z) > 4.2)
+  ) {
     GROVE.push([x, z]);
   }
 }
-// a continuous row anchors the northern lawn instead of one isolated tree
+// continuous northern lawn row
 for (const x of [-10, -6.4, -2.8]) {
   GROVE.push([x, -18.85]);
 }
-// low planting stays on the lawn beds, away from the Survivor Tree's paving
+// low planting within lawn beds
 const BUSHES = [
-  [-10.5,-19.7], [-6.8,-19.7], [-2,-19.7],
-  [-17.5,-13], [-15,-6], [-16,3], [-16,10], [-15,14.5],
-  [-10,-.5], [-5.2,.8], [-9.8,5.5], [-9.5,14],
-  [3.3,-14], [3.3,-9.5], [8.5,-15.8], [10.8,-12.5],
-  [-1.4,1.8], [2,18.6], [5,19.3], [8.4,18.5], [11,19.4],
-  [-18,-16], [-15,-15], [-18,-8], [-14.4,-3.4],
-  [-17,6.5], [-14.5,8], [-17,13.5], [-15.5,16],
-  [-10.8,1], [-7.5,.7], [-10,8.5], [-7.3,12.5], [-10.2,16],
-  [-9,-19.7], [-4.5,-19.7], [-1.8,-18],
-  [2.7,-11.7], [4.2,-15], [7.4,-10], [9.5,-9.2], [11,-16],
-  [-2,2.8], [-11,19.8], [-7.5,19.8], [-3,19.7],
-  [3.6,18.2], [8.2,19.7], [10.7,18.3],
+  [-10.5, -19.7],
+  [-6.8, -19.7],
+  [-2, -19.7],
+  [-17.5, -13],
+  [-15, -6],
+  [-16, 3],
+  [-16, 10],
+  [-15, 14.5],
+  [-10, -0.5],
+  [-5.2, 0.8],
+  [-9.8, 5.5],
+  [-9.5, 14],
+  [3.3, -14],
+  [3.3, -9.5],
+  [8.5, -15.8],
+  [10.8, -12.5],
+  [-1.4, 1.8],
+  [2, 18.6],
+  [5, 19.3],
+  [8.4, 18.5],
+  [11, 19.4],
+  [-18, -16],
+  [-15, -15],
+  [-18, -8],
+  [-14.4, -3.4],
+  [-17, 6.5],
+  [-14.5, 8],
+  [-17, 13.5],
+  [-15.5, 16],
+  [-10.8, 1],
+  [-7.5, 0.7],
+  [-10, 8.5],
+  [-7.3, 12.5],
+  [-10.2, 16],
+  [-9, -19.7],
+  [-4.5, -19.7],
+  [-1.8, -18],
+  [2.7, -11.7],
+  [4.2, -15],
+  [7.4, -10],
+  [9.5, -9.2],
+  [11, -16],
+  [-2, 2.8],
+  [-11, 19.8],
+  [-7.5, 19.8],
+  [-3, 19.7],
+  [3.6, 18.2],
+  [8.2, 19.7],
+  [10.7, 18.3],
 ];
-// Match the planted positions, including their seeded offsets and model scale.
+// collision bounds match seeded planting offsets
 const PEDESTRIAN_OBSTACLES = [
-  ...GROVE.map(([x,z],i) => ({x:x+(hash(i*5)-.5)*.5,z:z+(hash(i*7)-.5)*.5,radius:.65})),
-  ...BUSHES.map(([x,z],i) => ({x,z,radius:[1.01,1.69,1.44,.98][i%4]*(.85+hash(i+27)*.3)+.3})),
-  {x:SURVIVOR_TREE[0],z:SURVIVOR_TREE[2],radius:.85},
-  // Uploaded Oculus is normalized to 14 x 12; include shoulder clearance.
-  {box:true,x:OCULUS[0],z:OCULUS[2],hx:7.35,hz:6.35},
+  ...GROVE.map(([x, z], i) => ({
+    x: x + (hash(i * 5) - 0.5) * 0.5,
+    z: z + (hash(i * 7) - 0.5) * 0.5,
+    radius: 0.65,
+  })),
+  ...BUSHES.map(([x, z], i) => ({
+    x,
+    z,
+    radius: [1.01, 1.69, 1.44, 0.98][i % 4] * (0.85 + hash(i + 27) * 0.3) + 0.3,
+  })),
+  { x: SURVIVOR_TREE[0], z: SURVIVOR_TREE[2], radius: 0.85 },
+  // 14 × 12 Oculus bounds, plus shoulder clearance
+  { box: true, x: OCULUS[0], z: OCULUS[2], hx: 7.35, hz: 6.35 },
 ];
-const skyVert = `varying vec2 vSkyUv;
-void main(){vSkyUv=uv;gl_Position=vec4(position.xy,1.,1.);}`;
-const skyFrag = `precision highp float;
-varying vec2 vSkyUv;
-uniform float uNight;uniform float uDay;uniform float uTime;
-uniform vec2 uSkySize;
-${skyColors}
-float starHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float cloudNoise(vec2 p){
-  vec2 cell=floor(p),f=fract(p);f=f*f*(3.-2.*f);
-  return mix(mix(starHash(cell),starHash(cell+vec2(1.,0.)),f.x),mix(starHash(cell+vec2(0.,1.)),starHash(cell+1.),f.x),f.y);
-}
-float cloudLayers(vec2 p){
-  float value=0.,weight=.5;
-  for(int i=0;i<5;i++){
-    value+=cloudNoise(p)*weight;
-    p=p*2.03+vec2(7.1,13.7);weight*=.5;
-  }
-  return value;
-}
-void main(){
-  vec3 color=skyColor(vSkyUv,uDay,uNight);
-  vec2 grid=vSkyUv*uSkySize/48.;
-  vec2 cell=floor(grid);
-  float seed=starHash(cell);
-  vec2 center=vec2(.2)+vec2(starHash(cell+17.),starHash(cell+41.))*.6;
-  vec2 p=(fract(grid)-center)*48.;
-  float twinkle=.55+.45*sin(uTime*(.65+seed)+seed*63.);
-  float core=exp(-dot(p,p)/(seed>.96 ? 2.2 : .65));
-  float glow=exp(-dot(p,p)/18.)*.12;
-  float cross=exp(-abs(p.x)*4.-abs(p.y)*.3)+exp(-abs(p.y)*4.-abs(p.x)*.3);
-  float skyOnly=smoothstep(skyEdge(vSkyUv.x)+.015,skyEdge(vSkyUv.x)+.05,vSkyUv.y);
-  float stars=step(.86,seed)*(core*.35+glow+cross*.5)*twinkle*uNight*skyOnly;
-  color+=mix(vec3(.65,.76,1.),vec3(1.,.92,.74),seed)*stars*.7;
-  // Soft cloud banks drift behind the skyline, leaving gaps for the blue gradient.
-  vec2 cloudUv=vec2(vSkyUv.x*uSkySize.x/max(1.,uSkySize.y)*3.,vSkyUv.y*7.);
-  cloudUv+=vec2(uTime*.009,uTime*.0015);
-  float cloudField=cloudLayers(cloudUv+vec2(cloudNoise(cloudUv*.6)*.7,0.));
-  float cloud=smoothstep(.46,.69,cloudField);
-  float cloudMask=smoothstep(skyEdge(vSkyUv.x)+.035,skyEdge(vSkyUv.x)+.14,vSkyUv.y);
-  vec3 cloudColor=mix(linearRGB(vec3(.88,.86,.96)),linearRGB(vec3(1.,.97,.94)),smoothstep(.48,.72,cloudField));
-  color=mix(color,cloudColor,cloud*cloudMask*uDay*(1.-uNight)*.5);
-  float nightCloud=smoothstep(.60,.78,cloudField);
-  vec3 nightCloudColor=mix(linearRGB(vec3(.32,.34,.53)),linearRGB(vec3(.48,.48,.68)),cloudField);
-  color=mix(color,nightCloudColor,nightCloud*cloudMask*uNight*.3);
-  gl_FragColor=vec4(color,1.);
-}`;
-const waterVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
-const waterFrag = `precision highp float; varying vec2 vUv;uniform float uTime;uniform float uNight;uniform float uDay;
-float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
-float n2(vec2 x){vec2 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);}
-void main(){vec2 uv=vUv;float ripple=sin((uv.x+uv.y)*35.-uTime*.93)*.017+sin(uv.x*95.+uTime*.43)*.009;
-float waves=n2(uv*22.+uTime*.07);vec3 dark=mix(vec3(.020,.075,.12),vec3(.015,.047,.08),uNight);
-dark=mix(dark,vec3(.035,.16,.22),uDay);
-float brightness=clamp(waves*.10+ripple+.022,0.,1.);vec3 color=dark+vec3(.27,.45,.54)*brightness;
-float foam=max(smoothstep(.95,1.,uv.x),smoothstep(.95,1.,uv.y))*0.18;
-color+=vec3(.33,.55,.67)*foam;gl_FragColor=vec4(color,1.);}`;
-const fallVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
-const fallFrag = `precision mediump float;varying vec2 vUv;uniform float uTime;uniform float uNight;
-float hash(float x){return fract(sin(x*43.758)*13842.23);}
-void main(){float streak=sin(vUv.x*530.+sin(uTime*1.8+vUv.x*60.)*1.5)*.5+.5;
-float foam=sin(vUv.y*90.-uTime*13.+hash(floor(vUv.x*65.))*6.28)*.5+.5;
-float a=.2+.35*pow(streak,5.)+.13*foam;
-vec3 c=mix(vec3(.56,.82,.94),vec3(.58,.67,.95),uNight);gl_FragColor=vec4(c,a);}`;
-
+// sky and celestial bodies
 function Sky({ blend, daylight, paused, reducedMotion }) {
   const horizon = useSkyHorizon();
   const ref = useRef();
   const uniforms = useMemo(
-    () => ({ skyHorizon: { value: horizon }, uNight: { value: 0 }, uDay: { value: 0 }, uTime: { value: 0 }, uSkySize: { value: new THREE.Vector2(1, 1) } }),
+    () => ({
+      skyHorizon: { value: horizon },
+      uNight: { value: 0 },
+      uDay: { value: 0 },
+      uTime: { value: 0 },
+      uSkySize: { value: new THREE.Vector2(1, 1) },
+    }),
     [horizon],
   );
-  useFrame(({ size },dt) => {
+  useFrame(({ size }, dt) => {
     if (ref.current) {
       ref.current.uniforms.uSkySize.value.set(size.width, size.height);
       ref.current.uniforms.uNight.value = blend.current;
       ref.current.uniforms.uDay.value = daylight.current;
-      if(!paused && !reducedMotion) ref.current.uniforms.uTime.value += Math.min(dt,.05);
+      if (!paused && !reducedMotion)
+        ref.current.uniforms.uTime.value += Math.min(dt, 0.05);
     }
   });
   return (
@@ -211,80 +244,119 @@ function Sky({ blend, daylight, paused, reducedMotion }) {
     </mesh>
   );
 }
-function SunMoon({ placed, night, blend, guideActive, guidancePulse, celestial }) {
+function SunMoon({
+  placed,
+  night,
+  blend,
+  guideActive,
+  guidancePulse,
+  celestial,
+}) {
   let sun = useRef(),
     moon = useRef();
   const { camera } = useThree();
   useFrame(() => {
-    const state=celestial.current;
+    const state = celestial.current;
     sun.current.position.copy(CELESTIAL_TOP);
-    sun.current.position.y -= 45 * (1-state.sun);
-    sun.current.visible=!placed || state.sun>.005;
+    sun.current.position.y -= 45 * (1 - state.sun);
+    sun.current.visible = !placed || state.sun > 0.005;
     sun.current.quaternion.copy(camera.quaternion);
     moon.current.position.copy(CELESTIAL_TOP);
-    moon.current.position.y -= 45 * (1-state.moon);
+    moon.current.position.y -= 45 * (1 - state.moon);
     moon.current.quaternion.copy(camera.quaternion);
-    moon.current.visible=placed && state.moon>.005;
-    const fade = guideActive ? 1 - guidancePulse.current * .85 : 1;
-    sun.current.traverse(node => {
-      if (node.isMesh) (Array.isArray(node.material) ? node.material : [node.material]).forEach(material => {
-        const opacity = (placed ? 1 : .24) * fade;
-        if (material.uniforms?.sunOpacity) material.uniforms.sunOpacity.value = opacity;
-        else material.opacity = opacity;
-      });
+    moon.current.visible = placed && state.moon > 0.005;
+    const fade = guideActive ? 1 - guidancePulse.current * 0.85 : 1;
+    sun.current.traverse((node) => {
+      if (node.isMesh)
+        (Array.isArray(node.material)
+          ? node.material
+          : [node.material]
+        ).forEach((material) => {
+          const opacity = (placed ? 1 : 0.24) * fade;
+          if (material.uniforms?.sunOpacity)
+            material.uniforms.sunOpacity.value = opacity;
+          else material.opacity = opacity;
+        });
     });
-    moon.current.traverse(node => {
-      if(node.isMesh && node.material.uniforms?.moonOpacity) node.material.uniforms.moonOpacity.value=fade;
+    moon.current.traverse((node) => {
+      if (node.isMesh && node.material.uniforms?.moonOpacity)
+        node.material.uniforms.moonOpacity.value = fade;
     });
   });
   return (
     <group>
       <group ref={sun}>
-        {placed ? <PastelSun placed /> : (
+        {placed ? (
+          <PastelSun placed />
+        ) : (
           <mesh>
             <sphereGeometry args={[2.3, 48, 32]} />
-            <meshBasicMaterial color="#c7c0d3" transparent opacity={.24} depthWrite={false} toneMapped={false} side={THREE.FrontSide} />
+            <meshBasicMaterial
+              color="#c7c0d3"
+              transparent
+              opacity={0.24}
+              depthWrite={false}
+              toneMapped={false}
+              side={THREE.FrontSide}
+            />
           </mesh>
         )}
       </group>
       <group ref={moon}>
         <MoonGlow />
         <mesh>
-        <sphereGeometry args={[1.7, 48, 32]} />
-        <shaderMaterial vertexShader={moonVertex} fragmentShader={moonFragment}
-          uniforms={{moonOpacity: {value: 1}}} transparent depthWrite={false} toneMapped={false} />
+          <sphereGeometry args={[1.7, 48, 32]} />
+          <shaderMaterial
+            vertexShader={moonVertex}
+            fragmentShader={moonFragment}
+            uniforms={{ moonOpacity: { value: 1 } }}
+            transparent
+            depthWrite={false}
+            toneMapped={false}
+          />
         </mesh>
       </group>
     </group>
   );
 }
+// plaza and model fallbacks
 function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
   const crosswalkMaterials = useRef([]);
   const streetMaterial = useRef(null);
   const laneMaterials = useRef({});
   useFrame(() => {
-    const fade = guideActive ? 1 - guidancePulse.current * .85 : 1;
-    if (streetMaterial.current) streetMaterial.current.opacity = streetPlaced ? 1 : .32 * fade;
-    Object.values(laneMaterials.current).forEach(material => {
-      if (material) material.opacity = streetPlaced ? .4 : .32 * fade;
+    const fade = guideActive ? 1 - guidancePulse.current * 0.85 : 1;
+    if (streetMaterial.current)
+      streetMaterial.current.opacity = streetPlaced ? 1 : 0.32 * fade;
+    Object.values(laneMaterials.current).forEach((material) => {
+      if (material) material.opacity = streetPlaced ? 0.4 : 0.32 * fade;
     });
-    crosswalkMaterials.current.forEach(material => {
-      if (material) material.opacity = streetPlaced ? .85 : guideActive ? .32 * (1 - guidancePulse.current * .85) : .32;
+    crosswalkMaterials.current.forEach((material) => {
+      if (material)
+        material.opacity = streetPlaced
+          ? 0.85
+          : guideActive
+            ? 0.32 * (1 - guidancePulse.current * 0.85)
+            : 0.32;
     });
   });
-  const streets = useMemo(() => [STREET_X, -25].map((center) => {
-    const halfWidth = center === STREET_X ? 3 : 2.5;
-    const shape = new THREE.Shape();
-    shape.moveTo(center - halfWidth, -85);
-    shape.lineTo(center + halfWidth, -85);
-    // follow the curved city edge so the roads don't stop halfway across the plaza
-    for (let i = 0; i <= 20; i++) {
-      const x = center + halfWidth - i / 20 * halfWidth * 2;
-      shape.lineTo(x, 2 + Math.sqrt(48 * 48 - x * x));
-    }
-    shape.closePath();
-    return shape;
-  }), []);
+  const streets = useMemo(
+    () =>
+      [STREET_X, -25].map((center) => {
+        const halfWidth = center === STREET_X ? 3 : 2.5;
+        const shape = new THREE.Shape();
+        shape.moveTo(center - halfWidth, -85);
+        shape.lineTo(center + halfWidth, -85);
+        // roads follow the curved plaza edge
+        for (let i = 0; i <= 20; i++) {
+          const x = center + halfWidth - (i / 20) * halfWidth * 2;
+          shape.lineTo(x, 2 + Math.sqrt(48 * 48 - x * x));
+        }
+        shape.closePath();
+        return shape;
+      }),
+    [],
+  );
   const plaza = useMemo(() => {
     const shape = new THREE.Shape();
     shape.moveTo(-65, -85);
@@ -292,12 +364,18 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
     shape.lineTo(48, 2);
     shape.absarc(0, 2, 48, 0, Math.PI, false);
     shape.closePath();
-    // openings let the imported basins sit below the paving instead of getting covered
+    // paving openings for imported basins
     for (const [x, , z] of [NORTH_POOL, SOUTH_POOL]) {
       const hole = new THREE.Path();
       const edge = [
-        [-5.5, -5.04], [-5.19, -5.35], [5.19, -5.35], [5.5, -5.04],
-        [5.5, 5.04], [5.19, 5.35], [-5.19, 5.35], [-5.5, 5.04],
+        [-5.5, -5.04],
+        [-5.19, -5.35],
+        [5.19, -5.35],
+        [5.5, -5.04],
+        [5.5, 5.04],
+        [5.19, 5.35],
+        [-5.19, 5.35],
+        [-5.5, 5.04],
       ];
       edge.forEach(([dx, dz], i) => {
         if (i === 0) hole.moveTo(x + dx, -z + dz);
@@ -336,37 +414,55 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
     }
     const t = new THREE.CanvasTexture(canvas);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(.45, .45);
+    t.repeat.set(0.45, 0.45);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }, []);
   return (
     <group>
       <mesh rotation={[-PI / 2, 0, 0]} receiveShadow>
-        {/* finite plaza so the ground doesn’t cover the sky */}
+        {/* finite plaza preserves the sky */}
         <shapeGeometry args={[plaza, 64]} />
-        <meshStandardMaterial map={tex} color={sunny ? "#f2e5ef" : "#f4ebf7"} roughness={0.98} />
+        <meshStandardMaterial
+          map={tex}
+          color={sunny ? "#f2e5ef" : "#f4ebf7"}
+          roughness={0.98}
+        />
       </mesh>
       <ParkLawns sunny={sunny} />
       {streets.map((shape, i) => (
-        <mesh key={i} rotation={[-PI / 2, 0, 0]} position={[0, .035, 0]} receiveShadow>
+        <mesh
+          key={i}
+          rotation={[-PI / 2, 0, 0]}
+          position={[0, 0.035, 0]}
+          receiveShadow
+        >
           <shapeGeometry args={[shape]} />
-          <meshStandardMaterial ref={i === 0 ? streetMaterial : undefined}
-            color={sunny ? "#9baab7" : "#899eaf"} roughness={.96}
-            transparent={i === 0} opacity={i === 0 && !streetPlaced ? .32 : 1}
-            depthWrite={i !== 0 || streetPlaced} />
+          <meshStandardMaterial
+            ref={i === 0 ? streetMaterial : undefined}
+            color={sunny ? "#9baab7" : "#899eaf"}
+            roughness={0.96}
+            transparent={i === 0}
+            opacity={i === 0 && !streetPlaced ? 0.32 : 1}
+            depthWrite={i !== 0 || streetPlaced}
+          />
         </mesh>
       ))}
-      <mesh rotation={[-PI / 2, 0, 0]} position={[0, .04, 23]} receiveShadow>
+      <mesh rotation={[-PI / 2, 0, 0]} position={[0, 0.04, 23]} receiveShadow>
         <planeGeometry args={[80, 5]} />
-        <meshStandardMaterial color={sunny ? "#9baab7" : "#899eaf"} roughness={.96} />
+        <meshStandardMaterial
+          color={sunny ? "#9baab7" : "#899eaf"}
+          roughness={0.96}
+        />
       </mesh>
-      {Array.from({length: 13}, (_, i) => -36 + i * 6)
-        .filter(x => Math.abs(x - STREET_X) > 4 && Math.abs(x + 25) > 3.5)
-        .map(x => <mesh key={x} rotation={[-PI / 2, 0, 0]} position={[x, .05, 23]}>
-          <planeGeometry args={[2.1, .09]} />
-          <meshBasicMaterial color="#efedf2" transparent opacity={.4} />
-        </mesh>)}
+      {Array.from({ length: 13 }, (_, i) => -36 + i * 6)
+        .filter((x) => Math.abs(x - STREET_X) > 4 && Math.abs(x + 25) > 3.5)
+        .map((x) => (
+          <mesh key={x} rotation={[-PI / 2, 0, 0]} position={[x, 0.05, 23]}>
+            <planeGeometry args={[2.1, 0.09]} />
+            <meshBasicMaterial color="#efedf2" transparent opacity={0.4} />
+          </mesh>
+        ))}
       {Array.from({ length: 22 }, (_, i) => -40 + i * 6)
         .filter((z) => Math.abs(z - CROSSWALK_Z) > 2.5 && Math.abs(z - 23) > 3)
         .map((z) => (
@@ -376,7 +472,15 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
             position={[STREET_X, 0.05, z]}
           >
             <planeGeometry args={[0.09, 2.1]} />
-            <meshBasicMaterial ref={material => { laneMaterials.current[z] = material; }} color="#efedf2" transparent opacity={streetPlaced ? .4 : .32} depthWrite={false} />
+            <meshBasicMaterial
+              ref={(material) => {
+                laneMaterials.current[z] = material;
+              }}
+              color="#efedf2"
+              transparent
+              opacity={streetPlaced ? 0.4 : 0.32}
+              depthWrite={false}
+            />
           </mesh>
         ))}
       {Array.from({ length: 8 }, (_, i) => (
@@ -388,10 +492,12 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
         >
           <planeGeometry args={[0.36, 2.2]} />
           <meshStandardMaterial
-            ref={material => { crosswalkMaterials.current[i] = material; }}
+            ref={(material) => {
+              crosswalkMaterials.current[i] = material;
+            }}
             color={streetPlaced ? "#eeeaf2" : "#898995"}
             transparent
-            opacity={streetPlaced ? .85 : .32}
+            opacity={streetPlaced ? 0.85 : 0.32}
             roughness={0.9}
           />
         </mesh>
@@ -402,14 +508,26 @@ function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
 function Pool(props) {
   return (
     <Suspense fallback={<PlaceholderPool {...props} />}>
-      <ReferencePool at={props.at} active={props.active} night={props.night} celestial={props.celestial} lightPosition={CELESTIAL_TOP} blend={props.blend} guideActive={props.guideActive} guidancePulse={props.guidancePulse} />
+      <ReferencePool
+        at={props.at}
+        active={props.active}
+        night={props.night}
+        celestial={props.celestial}
+        lightPosition={CELESTIAL_TOP}
+        blend={props.blend}
+        guideActive={props.guideActive}
+        guidancePulse={props.guidancePulse}
+      />
     </Suspense>
   );
 }
 
 function PlaceholderPool({ at, active, blend, index, sunny }) {
   let water = useRef(),
-    waterU = useMemo(() => ({ uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 0 } }), []);
+    waterU = useMemo(
+      () => ({ uTime: { value: 0 }, uNight: { value: 0 }, uDay: { value: 0 } }),
+      [],
+    );
   let fallU = useMemo(
     () => ({ uTime: { value: 0 }, uNight: { value: 0 } }),
     [],
@@ -570,7 +688,8 @@ function PlaceholderTree({
               ghost
                 ? "#e2d2ff"
                 : new THREE.Color().setHSL(
-                    (sunny ? 0.29 : 0.34) + hash(i + seed) * (sunny ? 0.07 : 0.1),
+                    (sunny ? 0.29 : 0.34) +
+                      hash(i + seed) * (sunny ? 0.07 : 0.1),
                     (sunny ? 0.29 : 0.18) + 0.08 * hash(i),
                     night ? 0.43 : sunny ? 0.57 : 0.61,
                   )
@@ -594,24 +713,36 @@ function Tree(props) {
 
 function PlaceholderMuseum() {
   return (
-    <group position={[2, 0, -.4]} rotation={[0, -.12, 0]} scale={[.85, 1, .8]}>
-      <mesh position={[0, .5, 0]} castShadow receiveShadow>
+    <group
+      position={[2, 0, -0.4]}
+      rotation={[0, -0.12, 0]}
+      scale={[0.85, 1, 0.8]}
+    >
+      <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
         <boxGeometry args={[4.1, 1, 6]} />
-        <meshStandardMaterial color="#8f929e" roughness={.7} />
+        <meshStandardMaterial color="#8f929e" roughness={0.7} />
       </mesh>
-      <mesh position={[0, 1.45, 0]} rotation={[0, 0, -.13]} castShadow>
-        <boxGeometry args={[4.4, .22, 6.4]} />
-        <meshStandardMaterial color="#bcc8da" metalness={.5} roughness={.35} />
+      <mesh position={[0, 1.45, 0]} rotation={[0, 0, -0.13]} castShadow>
+        <boxGeometry args={[4.4, 0.22, 6.4]} />
+        <meshStandardMaterial
+          color="#bcc8da"
+          metalness={0.5}
+          roughness={0.35}
+        />
       </mesh>
       {[-1, 1].map((side) => (
         <mesh key={side} position={[side * 2.06, 1.02, 0]}>
-          <boxGeometry args={[.06, .85, 5.8]} />
-          <meshStandardMaterial color="#6395a8" metalness={.6} roughness={.2} />
+          <boxGeometry args={[0.06, 0.85, 5.8]} />
+          <meshStandardMaterial
+            color="#6395a8"
+            metalness={0.6}
+            roughness={0.2}
+          />
         </mesh>
       ))}
-      {Array.from({length: 12}, (_, i) => (
-        <mesh key={i} position={[-2.1, 1, -2.7 + i * .49]}>
-          <boxGeometry args={[.08, 1.1, .045]} />
+      {Array.from({ length: 12 }, (_, i) => (
+        <mesh key={i} position={[-2.1, 1, -2.7 + i * 0.49]}>
+          <boxGeometry args={[0.08, 1.1, 0.045]} />
           <meshStandardMaterial color="#d3d5e1" />
         </mesh>
       ))}
@@ -619,16 +750,21 @@ function PlaceholderMuseum() {
   );
 }
 
+// visitor simulation
 function Person({ zone, index, data, enabled, simTime, stopPosition }) {
   const ref = useRef(),
     flashRef = useRef();
-  const moving=useRef(index < data.crossings);
-  const locomotion=useRef(1);
-  const travel=useRef(hash(index * 31 + (zone === "north" ? 1 : zone === "tree" ? 2 : 3)));
-  const previousTime=useRef(simTime.current);
-  // Route, direction and character choice use separate seeds.
+  const moving = useRef(index < data.crossings);
+  const locomotion = useRef(1);
+  const travel = useRef(
+    hash(index * 31 + (zone === "north" ? 1 : zone === "tree" ? 2 : 3)),
+  );
+  const previousTime = useRef(simTime.current);
+  // separate route, direction and character seeds
   const direction = Math.floor(index / 2) % 2 === 0 ? 1 : -1;
-  const female = hash(index * 47 + (zone === "north" ? 11 : zone === "tree" ? 23 : 37)) > .5;
+  const female =
+    hash(index * 47 + (zone === "north" ? 11 : zone === "tree" ? 23 : 37)) >
+    0.5;
   const linearPath = zone === "street" || (zone === "tree" && index % 3 === 0);
   useFrame(() => {
     if (!ref.current) return;
@@ -636,29 +772,71 @@ function Person({ zone, index, data, enabled, simTime, stopPosition }) {
     let speed =
       (0.65 + 0.35 * hash(index * 12)) *
       Math.max(0.65, Math.min(1.3, data.crossings / 23));
-    const delta=Math.max(0,Math.min(.1,t-previousTime.current));
-    previousTime.current=t;
+    const delta = Math.max(0, Math.min(0.1, t - previousTime.current));
+    previousTime.current = t;
+    // crossing indices first, stationary visitors after
     const stopped = enabled && index >= data.crossings;
     moving.current = !stopped;
-    const routeLength = zone === "north" ? 50 : zone === "tree" ? (linearPath ? 13.5 : 14) : (index % 2 === 0 ? 21.8 : 32);
-    if (!stopped) travel.current = (travel.current + delta * speed / routeLength) % 1;
-    // A short offstage gap separates the exit from the next entrance on open paths.
-    const inTransit = linearPath && !stopped && travel.current >= .96;
-    const progress = linearPath && !stopped ? Math.min(travel.current / .96, 1) : travel.current;
-    const f = direction === 1 ? progress : 1-progress;
-    const [x,z] = stopped ? stopPosition : pedestrianRoute(zone,index,linearPath ? f : f % 1,PEDESTRIAN_OBSTACLES);
-    const nextF = linearPath ? THREE.MathUtils.clamp(f + direction * .001, 0, 1) : (f + direction * .001 + 1) % 1;
-    const [nextX,nextZ] = pedestrianRoute(zone,index,nextF,PEDESTRIAN_OBSTACLES);
-    const traveled = Math.hypot(x-ref.current.position.x,z-ref.current.position.z);
-    moving.current = !stopped && !inTransit && (delta === 0 || traveled > .00001);
-    locomotion.current = speed / .75;
-    const onRoad = zone === "street" && Math.abs(x-STREET_X)<3;
-    const groundHeight = onRoad ? (Math.abs(z-CROSSWALK_Z)<1.1 ? .055 : .035) : .002;
+    const routeLength =
+      zone === "north"
+        ? 50
+        : zone === "tree"
+          ? linearPath
+            ? 13.5
+            : 14
+          : index % 2 === 0
+            ? 21.8
+            : 32;
+    if (!stopped)
+      travel.current = (travel.current + (delta * speed) / routeLength) % 1;
+    // offstage gap between route loops
+    const inTransit = linearPath && !stopped && travel.current >= 0.96;
+    const progress =
+      linearPath && !stopped
+        ? Math.min(travel.current / 0.96, 1)
+        : travel.current;
+    const f = direction === 1 ? progress : 1 - progress;
+    const [x, z] = stopped
+      ? stopPosition
+      : pedestrianRoute(
+          zone,
+          index,
+          linearPath ? f : f % 1,
+          PEDESTRIAN_OBSTACLES,
+        );
+    // nearby route sample for walking direction
+    const nextF = linearPath
+      ? THREE.MathUtils.clamp(f + direction * 0.001, 0, 1)
+      : (f + direction * 0.001 + 1) % 1;
+    const [nextX, nextZ] = pedestrianRoute(
+      zone,
+      index,
+      nextF,
+      PEDESTRIAN_OBSTACLES,
+    );
+    const traveled = Math.hypot(
+      x - ref.current.position.x,
+      z - ref.current.position.z,
+    );
+    moving.current =
+      !stopped && !inTransit && (delta === 0 || traveled > 0.00001);
+    locomotion.current = speed / 0.75;
+    const onRoad = zone === "street" && Math.abs(x - STREET_X) < 3;
+    const groundHeight = onRoad
+      ? Math.abs(z - CROSSWALK_Z) < 1.1
+        ? 0.055
+        : 0.035
+      : 0.002;
     ref.current.position.set(x, groundHeight, z);
-    const focal = zone === "north" ? NORTH_POOL : zone === "tree" ? SURVIVOR_TREE : [STREET_X,0,z];
+    const focal =
+      zone === "north"
+        ? NORTH_POOL
+        : zone === "tree"
+          ? SURVIVOR_TREE
+          : [STREET_X, 0, z];
     ref.current.rotation.y = stopped
-      ? Math.atan2(focal[0]-x,focal[2]-z)
-      : Math.atan2(nextX-x,nextZ-z);
+      ? Math.atan2(focal[0] - x, focal[2] - z)
+      : Math.atan2(nextX - x, nextZ - z);
     ref.current.visible = enabled && !inTransit;
     ref.current.scale.setScalar(1);
     if (flashRef.current)
@@ -671,7 +849,13 @@ function Person({ zone, index, data, enabled, simTime, stopPosition }) {
   return (
     <group ref={ref} userData={{ pedestrian: true }}>
       <Suspense fallback={null}>
-        <AnimatedVisitor female={female} moving={moving} locomotion={locomotion} simTime={simTime} seed={index} />
+        <AnimatedVisitor
+          female={female}
+          moving={moving}
+          locomotion={locomotion}
+          simTime={simTime}
+          seed={index}
+        />
       </Suspense>
       <mesh ref={flashRef} position={[0, 0.62, 0.2]}>
         <sphereGeometry args={[0.09, 8, 8]} />
@@ -682,8 +866,22 @@ function Person({ zone, index, data, enabled, simTime, stopPosition }) {
 }
 function People({ placed, period, paused }) {
   const d = OBS[period];
-  const idleLayout = useMemo(() => Object.fromEntries(["north","tree","street"].map(zone =>
-    [zone, stoppedPositions(zone,d[zone].stops,d[zone].crossings,PEDESTRIAN_OBSTACLES)])),[d]);
+  const idleLayout = useMemo(
+    () =>
+      Object.fromEntries(
+        ["north", "tree", "street"].map((zone) => [
+          zone,
+          stoppedPositions(
+            zone,
+            d[zone].stops,
+            d[zone].crossings,
+            PEDESTRIAN_OBSTACLES,
+          ),
+        ]),
+      ),
+    [d],
+  );
+  // shared clock keeps routes and character clips paused together
   const simTime = useRef(0);
   useFrame((_, dt) => {
     if (!paused) simTime.current += dt;
@@ -691,117 +889,178 @@ function People({ placed, period, paused }) {
   return (
     <group>
       {["north", "tree", "street"].map((zone) =>
-        Array.from({ length: placed.sky && placed[zone] ? d[zone].crossings + d[zone].stops : 0 }, (_, i) => (
-          <Person
-            key={zone + i}
-            zone={zone}
-            index={i}
-            stopPosition={idleLayout[zone][i-d[zone].crossings]}
-            data={d[zone]}
-            enabled={placed[zone]}
-            simTime={simTime}
-          />
-        )),
+        Array.from(
+          {
+            length:
+              placed.sky && placed[zone]
+                ? d[zone].crossings + d[zone].stops
+                : 0,
+          },
+          (_, i) => (
+            <Person
+              key={zone + i}
+              zone={zone}
+              index={i}
+              stopPosition={idleLayout[zone][i - d[zone].crossings]}
+              data={d[zone]}
+              enabled={placed[zone]}
+              simTime={simTime}
+            />
+          ),
+        ),
       )}
     </group>
   );
 }
-// widen the lens on narrow screens, then back up if needed to keep the plaza in view
+// narrow screens: wider lens, then camera setback
+// camera controls
 const BASE_FOV = 42,
   MAX_FOV = 75,
   FIT_ASPECT = 1.3;
 const deg = THREE.MathUtils.degToRad;
 function Rig({ cameraZone, interactive, viewReset }) {
   const { camera, gl } = useThree();
-  const orbit=useRef({yaw:0,pitch:0,zoom:1,focus:new THREE.Vector3(...OVERVIEW.target)});
-  const spherical=useMemo(()=>new THREE.Spherical(),[]);
-  useEffect(()=>{
-    Object.assign(orbit.current,{yaw:0,pitch:0,zoom:1});
+  const orbit = useRef({
+    yaw: 0,
+    pitch: 0,
+    zoom: 1,
+    focus: new THREE.Vector3(...OVERVIEW.target),
+  });
+  const spherical = useMemo(() => new THREE.Spherical(), []);
+  useEffect(() => {
+    Object.assign(orbit.current, { yaw: 0, pitch: 0, zoom: 1 });
     orbit.current.focus.set(...OVERVIEW.target);
-  },[viewReset]);
-  useEffect(()=>{
-    const canvas=gl.domElement;
-    if(cameraZone || !interactive)return;
-    const pointers=new Map();
-    const oldCursor=canvas.style.cursor,oldTouch=canvas.style.touchAction;
-    canvas.style.cursor="grab";canvas.style.touchAction="none";
-    const clamp=THREE.MathUtils.clamp;
-    const raycaster=new THREE.Raycaster();
-    const ground=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-    const cursor=new THREE.Vector2();
-    const groundAt=(x,y)=>{
-      const rect=canvas.getBoundingClientRect();
-      cursor.set((x-rect.left)/rect.width*2-1,1-(y-rect.top)/rect.height*2);
-      raycaster.setFromCamera(cursor,camera);
-      return raycaster.ray.intersectPlane(ground,new THREE.Vector3());
+  }, [viewReset]);
+  useEffect(() => {
+    const canvas = gl.domElement;
+    if (cameraZone || !interactive) return;
+    const pointers = new Map();
+    const oldCursor = canvas.style.cursor,
+      oldTouch = canvas.style.touchAction;
+    canvas.style.cursor = "grab";
+    canvas.style.touchAction = "none";
+    const clamp = THREE.MathUtils.clamp;
+    const raycaster = new THREE.Raycaster();
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const cursor = new THREE.Vector2();
+    const groundAt = (x, y) => {
+      const rect = canvas.getBoundingClientRect();
+      cursor.set(
+        ((x - rect.left) / rect.width) * 2 - 1,
+        1 - ((y - rect.top) / rect.height) * 2,
+      );
+      raycaster.setFromCamera(cursor, camera);
+      return raycaster.ray.intersectPlane(ground, new THREE.Vector3());
     };
-    const limitFocus=()=>{
-      const focus=orbit.current.focus;
-      focus.x=clamp(focus.x,-48,48);focus.z=clamp(focus.z,-48,38);focus.y=clamp(focus.y,0,8);
+    const limitFocus = () => {
+      const focus = orbit.current.focus;
+      focus.x = clamp(focus.x, -48, 48);
+      focus.z = clamp(focus.z, -48, 38);
+      focus.y = clamp(focus.y, 0, 8);
     };
-    const zoomAt=(factor,x,y)=>{
-      const state=orbit.current;
-      const next=clamp(state.zoom*factor,.12,1.25);
-      const anchor=groundAt(x,y);
-      if(anchor)state.focus.addScaledVector(anchor.sub(state.focus),1-next/state.zoom);
-      state.zoom=next;limitFocus();
+    const zoomAt = (factor, x, y) => {
+      const state = orbit.current;
+      const next = clamp(state.zoom * factor, 0.12, 1.25);
+      const anchor = groundAt(x, y);
+      // shift focus toward the ground point under the cursor
+      if (anchor)
+        state.focus.addScaledVector(
+          anchor.sub(state.focus),
+          1 - next / state.zoom,
+        );
+      state.zoom = next;
+      limitFocus();
     };
-    const pan=(from,to)=>{
-      const a=groundAt(from.x,from.y),b=groundAt(to.x,to.y);
-      if(a&&b){orbit.current.focus.addScaledVector(a.sub(b),.75);limitFocus();}
+    const pan = (from, to) => {
+      const a = groundAt(from.x, from.y),
+        b = groundAt(to.x, to.y);
+      if (a && b) {
+        orbit.current.focus.addScaledVector(a.sub(b), 0.75);
+        limitFocus();
+      }
     };
-    const distance=()=>{const [a,b]=[...pointers.values()];return Math.hypot(a.x-b.x,a.y-b.y);};
-    const midpoint=()=>{const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};};
-    const down=e=>{
-      if(e.button!==0 && e.button!==2)return;
-      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey});
-      canvas.setPointerCapture(e.pointerId);canvas.style.cursor="grabbing";
+    const distance = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
     };
-    const move=e=>{
-      const previous=pointers.get(e.pointerId);if(!previous)return;
-      const before=pointers.size===2 ? distance() : 0;
-      const oldCenter=pointers.size===2 ? midpoint() : null;
-      const next={x:e.clientX,y:e.clientY,pan:previous.pan};
-      pointers.set(e.pointerId,next);
-      if(pointers.size===2){
-        const after=distance(),center=midpoint();
-        pan(oldCenter,center);
-        if(before>0 && after>0)zoomAt(Math.pow(before/after,.65),center.x,center.y);
-      } else if(pointers.size===1){
-        if(previous.pan)pan(previous,next);
+    const midpoint = () => {
+      const [a, b] = [...pointers.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    const down = (e) => {
+      if (e.button !== 0 && e.button !== 2) return;
+      pointers.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        pan: e.button === 2 || e.shiftKey,
+      });
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+    };
+    const move = (e) => {
+      const previous = pointers.get(e.pointerId);
+      if (!previous) return;
+      const before = pointers.size === 2 ? distance() : 0;
+      const oldCenter = pointers.size === 2 ? midpoint() : null;
+      const next = { x: e.clientX, y: e.clientY, pan: previous.pan };
+      pointers.set(e.pointerId, next);
+      if (pointers.size === 2) {
+        const after = distance(),
+          center = midpoint();
+        pan(oldCenter, center);
+        if (before > 0 && after > 0)
+          zoomAt(Math.pow(before / after, 0.65), center.x, center.y);
+      } else if (pointers.size === 1) {
+        if (previous.pan) pan(previous, next);
         else {
-          orbit.current.yaw=clamp(orbit.current.yaw-(e.clientX-previous.x)*.0012,-.45,.45);
-          orbit.current.pitch=clamp(orbit.current.pitch+(e.clientY-previous.y)*.0009,-.22,.15);
+          orbit.current.yaw = clamp(
+            orbit.current.yaw - (e.clientX - previous.x) * 0.0012,
+            -0.45,
+            0.45,
+          );
+          orbit.current.pitch = clamp(
+            orbit.current.pitch + (e.clientY - previous.y) * 0.0009,
+            -0.22,
+            0.15,
+          );
         }
       }
     };
-    const up=e=>{
+    const up = (e) => {
       pointers.delete(e.pointerId);
-      if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
-      canvas.style.cursor=pointers.size ? "grabbing" : "grab";
+      if (canvas.hasPointerCapture(e.pointerId))
+        canvas.releasePointerCapture(e.pointerId);
+      canvas.style.cursor = pointers.size ? "grabbing" : "grab";
     };
-    const wheel=e=>{
+    const wheel = (e) => {
       e.preventDefault();
-      const delta=e.deltaY*(e.deltaMode===1 ? 16 : e.deltaMode===2 ? canvas.clientHeight : 1);
-      zoomAt(Math.exp(clamp(delta,-180,180)*.00055),e.clientX,e.clientY);
+      const delta =
+        e.deltaY *
+        (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1);
+      zoomAt(Math.exp(clamp(delta, -180, 180) * 0.00055), e.clientX, e.clientY);
     };
-    const context=e=>e.preventDefault();
-    canvas.addEventListener("contextmenu",context);
-    canvas.addEventListener("pointerdown",down);
-    canvas.addEventListener("pointermove",move);
-    canvas.addEventListener("pointerup",up);
-    canvas.addEventListener("pointercancel",up);
-    canvas.addEventListener("lostpointercapture",up);
-    canvas.addEventListener("wheel",wheel,{passive:false});
-    return ()=>{
-      canvas.removeEventListener("contextmenu",context);
-      canvas.removeEventListener("pointerdown",down);canvas.removeEventListener("pointermove",move);
-      canvas.removeEventListener("pointerup",up);canvas.removeEventListener("pointercancel",up);
-      canvas.removeEventListener("lostpointercapture",up);canvas.removeEventListener("wheel",wheel);
-      for(const id of pointers.keys())if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);
-      canvas.style.cursor=oldCursor;canvas.style.touchAction=oldTouch;
+    const context = (e) => e.preventDefault();
+    canvas.addEventListener("contextmenu", context);
+    canvas.addEventListener("pointerdown", down);
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", up);
+    canvas.addEventListener("pointercancel", up);
+    canvas.addEventListener("lostpointercapture", up);
+    canvas.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      canvas.removeEventListener("contextmenu", context);
+      canvas.removeEventListener("pointerdown", down);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", up);
+      canvas.removeEventListener("pointercancel", up);
+      canvas.removeEventListener("lostpointercapture", up);
+      canvas.removeEventListener("wheel", wheel);
+      for (const id of pointers.keys())
+        if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      canvas.style.cursor = oldCursor;
+      canvas.style.touchAction = oldTouch;
     };
-  },[gl,cameraZone,interactive,viewReset]);
+  }, [gl, cameraZone, interactive, viewReset]);
   let look = useRef(new THREE.Vector3(...OVERVIEW.target));
   const goal = useMemo(() => new THREE.Vector3(), []);
   const aim = useMemo(() => new THREE.Vector3(), []);
@@ -810,19 +1069,30 @@ function Rig({ cameraZone, interactive, viewReset }) {
     const halfTan =
       Math.tan(deg(BASE_FOV / 2)) * Math.max(1, FIT_ASPECT / camera.aspect);
     const maxTan = Math.tan(deg(MAX_FOV / 2));
-    camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.min(halfTan, maxTan)));
+    camera.fov = THREE.MathUtils.radToDeg(
+      2 * Math.atan(Math.min(halfTan, maxTan)),
+    );
     const pullBack = cameraZone ? 1 : Math.max(1, halfTan / maxTan);
     aim.set(...s.target);
-    goal.set(...s.pos).sub(aim).multiplyScalar(pullBack).add(aim);
+    goal
+      .set(...s.pos)
+      .sub(aim)
+      .multiplyScalar(pullBack)
+      .add(aim);
     if (!cameraZone) {
       spherical.setFromVector3(goal.sub(aim));
-      spherical.theta+=orbit.current.yaw;
-      spherical.phi=THREE.MathUtils.clamp(spherical.phi+orbit.current.pitch,.5,1.35);
-      spherical.radius*=orbit.current.zoom;
+      spherical.theta += orbit.current.yaw;
+      spherical.phi = THREE.MathUtils.clamp(
+        spherical.phi + orbit.current.pitch,
+        0.5,
+        1.35,
+      );
+      spherical.radius *= orbit.current.zoom;
       aim.copy(orbit.current.focus);
       goal.setFromSpherical(spherical).add(aim);
     }
-    const k = 1-Math.exp(-Math.min(dt,.05)*(cameraZone ? 1.2 : 1.7));
+    // frame-rate-independent easing, with capped resume delta
+    const k = 1 - Math.exp(-Math.min(dt, 0.05) * (cameraZone ? 1.2 : 1.7));
     camera.position.lerp(goal, k);
     look.current.lerp(aim, k);
     camera.lookAt(look.current);
@@ -830,6 +1100,7 @@ function Rig({ cameraZone, interactive, viewReset }) {
   });
   return null;
 }
+// overlay projection
 const _anchor = new THREE.Vector3();
 function ScreenAnchors({ overlays }) {
   const { camera, size } = useThree();
@@ -860,11 +1131,15 @@ function ScreenAnchors({ overlays }) {
       const [x, y] =
         zone === "sky"
           ? toScreen(_anchor.copy(CELESTIAL_TOP).project(camera))
-          : toScreen(_anchor.set(...(kind === "pin" ? ANCHORS[zone].pin : ANCHORS[zone].at)).project(camera));
+          : toScreen(
+              _anchor
+                .set(...(kind === "pin" ? ANCHORS[zone].pin : ANCHORS[zone].at))
+                .project(camera),
+            );
       place(els[key], x, y);
       if (kind === "pin") taken.push([x - 22, y - 22, x + 22, y + 22]);
     }
-    // try the preferred side first, then look for room away from pins + other cards
+    // preferred side first, avoiding pins and cards
     for (const [el, zone] of cards) {
       const a = ANCHORS[zone],
         w = el.offsetWidth,
@@ -873,7 +1148,11 @@ function ScreenAnchors({ overlays }) {
       const rectFor = (side, point) => {
         const [x, y] = toScreen(_anchor.set(...point).project(camera));
         const left =
-          side === "left" ? x - gap - w : side === "right" ? x + gap : x - w / 2;
+          side === "left"
+            ? x - gap - w
+            : side === "right"
+              ? x + gap
+              : x - w / 2;
         const top =
           side === "above"
             ? y - (point === a.at ? gap : 0) - h
@@ -904,6 +1183,7 @@ function ScreenAnchors({ overlays }) {
           top = THREE.MathUtils.clamp(t, 72, Math.max(72, floor - h));
         return [left, top, left + w, top + h];
       });
+      // least overlap if no candidate fits cleanly
       const r =
         options.find(fits) ||
         clamped.reduce((best, c) => (overlap(c) < overlap(best) ? c : best));
@@ -914,33 +1194,63 @@ function ScreenAnchors({ overlays }) {
   return null;
 }
 
+// lighting and scene assembly
 function SceneLighting({ daylight, blend, celestial }) {
-  const ambient=useRef(),sunlight=useRef(),hemisphere=useRef();
-  const colors=useMemo(()=>({warm:new THREE.Color("#fff2e6"),white:new THREE.Color("#ffffff"),night:new THREE.Color("#bdc5f7"),moon:new THREE.Color("#c9cafa")}),[]);
-  useFrame(()=>{
-    const d=daylight.current,n=blend.current;
-    ambient.current.intensity=lerp(lerp(1.65,2.1,d),.88,n);
-    ambient.current.color.copy(colors.warm).lerp(colors.white,d).lerp(colors.night,n);
-    const state=celestial.current;
-    const active=state.to!=="none";
-    const altitude=Math.max(state.sun,state.moon);
-    const moonlight=state.moon>state.sun;
-    if(active){
+  const ambient = useRef(),
+    sunlight = useRef(),
+    hemisphere = useRef();
+  const colors = useMemo(
+    () => ({
+      warm: new THREE.Color("#fff2e6"),
+      white: new THREE.Color("#ffffff"),
+      night: new THREE.Color("#bdc5f7"),
+      moon: new THREE.Color("#c9cafa"),
+    }),
+    [],
+  );
+  useFrame(() => {
+    const d = daylight.current,
+      n = blend.current;
+    ambient.current.intensity = lerp(lerp(1.65, 2.1, d), 0.88, n);
+    ambient.current.color
+      .copy(colors.warm)
+      .lerp(colors.white, d)
+      .lerp(colors.night, n);
+    const state = celestial.current;
+    const active = state.to !== "none";
+    const altitude = Math.max(state.sun, state.moon);
+    const moonlight = state.moon > state.sun;
+    if (active) {
       sunlight.current.position.copy(CELESTIAL_TOP);
-      sunlight.current.position.y-=45*(1-altitude);
-    } else sunlight.current.position.set(-12,22,8);
-    sunlight.current.intensity=active ? (moonlight ? 2 : 3.4)*THREE.MathUtils.smoothstep(altitude,.12,1) : 3;
-    sunlight.current.color.copy(moonlight ? colors.moon : colors.warm).lerp(colors.white,moonlight ? 0 : d);
-    hemisphere.current.intensity=lerp(.12,.85,d)*(1-n*.8);
+      sunlight.current.position.y -= 45 * (1 - altitude);
+    } else sunlight.current.position.set(-12, 22, 8);
+    sunlight.current.intensity = active
+      ? (moonlight ? 2 : 3.4) * THREE.MathUtils.smoothstep(altitude, 0.12, 1)
+      : 3;
+    sunlight.current.color
+      .copy(moonlight ? colors.moon : colors.warm)
+      .lerp(colors.white, moonlight ? 0 : d);
+    hemisphere.current.intensity = lerp(0.12, 0.85, d) * (1 - n * 0.8);
   });
-  return <>
-    <ambientLight ref={ambient}/>
-    <hemisphereLight ref={hemisphere} args={["#d9efff","#c9bbc9",.12]}/>
-    <directionalLight ref={sunlight} position={[-12,22,8]} castShadow
-      shadow-mapSize={[2048,2048]} shadow-camera-left={-30} shadow-camera-right={30}
-      shadow-camera-top={30} shadow-camera-bottom={-30} shadow-camera-far={180}
-      shadow-normalBias={.025} shadow-bias={-.00015}/>
-  </>;
+  return (
+    <>
+      <ambientLight ref={ambient} />
+      <hemisphereLight ref={hemisphere} args={["#d9efff", "#c9bbc9", 0.12]} />
+      <directionalLight
+        ref={sunlight}
+        position={[-12, 22, 8]}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-camera-bottom={-30}
+        shadow-camera-far={180}
+        shadow-normalBias={0.025}
+        shadow-bias={-0.00015}
+      />
+    </>
+  );
 }
 
 export default function World3D({
@@ -954,50 +1264,144 @@ export default function World3D({
   guideActive = false,
 }) {
   const blend = useRef(0);
-  const celestial=useRef({to:"none",from:"none",progress:1,fromNight:0,fromDay:0,sun:1,moon:0});
+  const celestial = useRef({
+    to: "none",
+    from: "none",
+    progress: 1,
+    fromNight: 0,
+    fromDay: 0,
+    sun: 1,
+    moon: 0,
+  });
   const guidancePulse = useRef(0);
   const guideElapsed = useRef(0);
-  const reducedMotion = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  const reducedMotion = useMemo(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
   const daylight = useRef(0);
   const sunny = placed.sky && period === "afternoon";
   useFrame((_, dt) => {
     guideElapsed.current = guideActive ? guideElapsed.current + dt : 0;
-    guidancePulse.current = reducedMotion ? .5 : .5 - .5 * Math.cos(guideElapsed.current * Math.PI * 2 / 1.8);
-    const state=celestial.current;
-    const requested=!placed.sky ? "none" : period==="evening" ? "moon" : "sun";
-    if (requested!==state.to) {
-      state.from=state.to;state.to=requested;state.progress=0;
-      state.fromNight=blend.current;state.fromDay=daylight.current;
+    guidancePulse.current = reducedMotion
+      ? 0.5
+      : 0.5 - 0.5 * Math.cos((guideElapsed.current * Math.PI * 2) / 1.8);
+    const state = celestial.current;
+    const requested = !placed.sky
+      ? "none"
+      : period === "evening"
+        ? "moon"
+        : "sun";
+    if (requested !== state.to) {
+      state.from = state.to;
+      state.to = requested;
+      state.progress = 0;
+      state.fromNight = blend.current;
+      state.fromDay = daylight.current;
     }
-    state.progress=Math.min(1,state.progress+dt/6.5);
-    const ease=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
-    const p=state.progress;
-    const setting=1-ease(p/.45),rising=ease((p-.55)/.45);
-    state.sun=requested==="none" ? 1 : state.from==="none" ? (requested==="sun" ? 1 : 0) : state.from==="sun" && p<.45 ? setting : state.to==="sun" ? rising : 0;
-    state.moon=state.from==="none" ? (requested==="moon" ? 1 : 0) : state.from==="moon" && p<.45 ? setting : state.to==="moon" ? rising : 0;
-    const dawn=state.from==="moon" && requested==="sun" ? ease((p-.15)/.85) : ease(p);
-    blend.current=lerp(state.fromNight,requested==="moon" ? 1 : 0,dawn);
-    daylight.current=lerp(state.fromDay,requested==="sun" ? 1 : 0,ease(p));
+    state.progress = Math.min(1, state.progress + dt / 6.5);
+    const ease = (t) => {
+      t = Math.max(0, Math.min(1, t));
+      return t * t * (3 - 2 * t);
+    };
+    const p = state.progress;
+    const setting = 1 - ease(p / 0.45),
+      rising = ease((p - 0.55) / 0.45);
+    state.sun =
+      requested === "none"
+        ? 1
+        : state.from === "none"
+          ? requested === "sun"
+            ? 1
+            : 0
+          : state.from === "sun" && p < 0.45
+            ? setting
+            : state.to === "sun"
+              ? rising
+              : 0;
+    state.moon =
+      state.from === "none"
+        ? requested === "moon"
+          ? 1
+          : 0
+        : state.from === "moon" && p < 0.45
+          ? setting
+          : state.to === "moon"
+            ? rising
+            : 0;
+    const dawn =
+      state.from === "moon" && requested === "sun"
+        ? ease((p - 0.15) / 0.85)
+        : ease(p);
+    blend.current = lerp(state.fromNight, requested === "moon" ? 1 : 0, dawn);
+    daylight.current = lerp(
+      state.fromDay,
+      requested === "sun" ? 1 : 0,
+      ease(p),
+    );
   });
   return (
     <>
       <color attach="background" args={["#a8bad4"]} />
-      <Rig cameraZone={cameraZone} interactive={interactive} viewReset={viewReset} />
+      <Rig
+        cameraZone={cameraZone}
+        interactive={interactive}
+        viewReset={viewReset}
+      />
       <ScreenAnchors overlays={overlays} />
-      <Sky blend={blend} daylight={daylight} paused={paused} reducedMotion={reducedMotion} />
-      <SunMoon placed={placed.sky} night={period === "evening"} blend={blend} guideActive={guideActive} guidancePulse={guidancePulse} celestial={celestial} />
+      <Sky
+        blend={blend}
+        daylight={daylight}
+        paused={paused}
+        reducedMotion={reducedMotion}
+      />
+      <SunMoon
+        placed={placed.sky}
+        night={period === "evening"}
+        blend={blend}
+        guideActive={guideActive}
+        guidancePulse={guidancePulse}
+        celestial={celestial}
+      />
       <SceneLighting daylight={daylight} blend={blend} celestial={celestial} />
       <DreamySurfaceLight celestial={celestial} lightPosition={CELESTIAL_TOP} />
-      <Ground sunny={sunny} streetPlaced={placed.street} guideActive={guideActive} guidancePulse={guidancePulse} />
+      <Ground
+        sunny={sunny}
+        streetPlaced={placed.street}
+        guideActive={guideActive}
+        guidancePulse={guidancePulse}
+      />
       <Suspense fallback={null}>
         <UploadedSkyline night={period === "evening"} />
       </Suspense>
-      <Pool celestial={celestial} guideActive={guideActive} guidancePulse={guidancePulse} at={NORTH_POOL} active={placed.north} blend={blend} index={1} sunny={sunny} night={period === "evening"} />
-      <Pool celestial={celestial} at={SOUTH_POOL} active={true} blend={blend} index={2} sunny={sunny} night={period === "evening"} />
+      <Pool
+        celestial={celestial}
+        guideActive={guideActive}
+        guidancePulse={guidancePulse}
+        at={NORTH_POOL}
+        active={placed.north}
+        blend={blend}
+        index={1}
+        sunny={sunny}
+        night={period === "evening"}
+      />
+      <Pool
+        celestial={celestial}
+        at={SOUTH_POOL}
+        active={true}
+        blend={blend}
+        index={2}
+        sunny={sunny}
+        night={period === "evening"}
+      />
       {GROVE.map(([x, z], i) => (
         <Tree
           key={i}
-          position={[x + (hash(i * 5) - 0.5) * 0.5, 0, z + (hash(i * 7) - 0.5) * 0.5]}
+          position={[
+            x + (hash(i * 5) - 0.5) * 0.5,
+            0,
+            z + (hash(i * 7) - 0.5) * 0.5,
+          ]}
           seed={i * 17 + 1}
           scale={0.9 + hash(i * 4) * 0.25}
           night={period === "evening"}
@@ -1006,8 +1410,14 @@ export default function World3D({
       ))}
       <Suspense fallback={null}>
         {BUSHES.map(([x, z], i) => (
-          <TexturedTree key={"bush-" + i} bush position={[x, .025, z]}
-            seed={i} scale={.85 + hash(i + 27) * .3} night={period === "evening"} />
+          <TexturedTree
+            key={"bush-" + i}
+            bush
+            position={[x, 0.025, z]}
+            seed={i}
+            scale={0.85 + hash(i + 27) * 0.3}
+            night={period === "evening"}
+          />
         ))}
       </Suspense>
       <Tree
@@ -1028,11 +1438,27 @@ export default function World3D({
         <UploadedOculus position={OCULUS} night={period === "evening"} />
       </Suspense>
       <People placed={placed} period={period} paused={paused} />
-      <EnchantedDust daylight={daylight} blend={blend} paused={paused} reducedMotion={reducedMotion} />
+      <EnchantedDust
+        daylight={daylight}
+        blend={blend}
+        paused={paused}
+        reducedMotion={reducedMotion}
+      />
       <EffectComposer multisampling={0} depthBuffer>
-        <AtmosphericHaze daylight={daylight} blend={blend} paused={paused} reducedMotion={reducedMotion} />
-        <EnchantedAtmosphere daylight={daylight} blend={blend} lightPosition={CELESTIAL_TOP} celestial={celestial}
-          paused={paused} reducedMotion={reducedMotion} />
+        <AtmosphericHaze
+          daylight={daylight}
+          blend={blend}
+          paused={paused}
+          reducedMotion={reducedMotion}
+        />
+        <EnchantedAtmosphere
+          daylight={daylight}
+          blend={blend}
+          lightPosition={CELESTIAL_TOP}
+          celestial={celestial}
+          paused={paused}
+          reducedMotion={reducedMotion}
+        />
 
         <Bloom
           mipmapBlur
