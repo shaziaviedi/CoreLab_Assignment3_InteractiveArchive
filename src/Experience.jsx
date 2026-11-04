@@ -29,6 +29,8 @@ export default function Experience({ preview = false }) {
   const [toastKey, setToastKey] = useState(0);
   const [guideActive, setGuideActive] = useState(false);
   const guideTimer = useRef(null);
+  const guideMenuRef = useRef(null);
+  const [guideRun, setGuideRun] = useState(0);
   const frameRef = useRef(null);
   const glRef = useRef(null),
     toastTimer = useRef(null),
@@ -60,6 +62,7 @@ export default function Experience({ preview = false }) {
       7000,
     );
     setGuideActive(true);
+    setGuideRun((run) => run + 1);
     clearTimeout(guideTimer.current);
     guideTimer.current = setTimeout(() => setGuideActive(false), 7000);
   }
@@ -182,6 +185,8 @@ export default function Experience({ preview = false }) {
             cameraZone={cameraZone}
             overlays={overlays}
             guideActive={guideActive}
+            guideRun={guideRun}
+            guideMenuRef={guideMenuRef}
           />
         </Canvas>
       </div>
@@ -263,16 +268,18 @@ export default function Experience({ preview = false }) {
             >
               <Icon name="reset" />
             </button>
+          </div>
+          <div className="scene-intro">
             <button
-              className="button-circle"
+              className="button-circle fragment-help"
               title="How to explore"
+              aria-label="How to explore"
               onClick={showInstructions}
             >
               <Icon name="info" />
             </button>
-          </div>
-          <div className="scene-intro">
             <nav
+              ref={guideMenuRef}
               className={
                 "fragment-menu" +
                 (dockOpen ? " is-open" : "") +

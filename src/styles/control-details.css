@@ -46,26 +46,12 @@
 }
 
 .fragment-menu.is-guided {
-  animation: guidance-pulse 1.8s ease-in-out infinite;
-}
-@keyframes guidance-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 8px #e5d9b926,
-      0 0 18px #e5d9b914;
-  }
-  50% {
-    box-shadow:
-      0 0 16px #e5d9b970,
-      0 0 36px #e5d9b935;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fragment-menu.is-guided {
-    animation: none;
-    box-shadow: 0 0 12px #e5d9b94d;
-  }
+  box-shadow:
+    0 0 5px rgb(248 241 220 / calc(0.16 + var(--guidance-pulse, 1) * 0.30)),
+    0 0 calc(10px + var(--guidance-pulse, 1) * 10px)
+      rgb(229 217 185 / calc(0.18 + var(--guidance-pulse, 1) * 0.34)),
+    0 0 calc(24px + var(--guidance-pulse, 1) * 24px)
+      rgb(229 217 185 / calc(0.10 + var(--guidance-pulse, 1) * 0.18));
 }
 
 .slot.sky.filled {

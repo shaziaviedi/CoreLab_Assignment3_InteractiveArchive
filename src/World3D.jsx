@@ -248,8 +248,6 @@ function SunMoon({
   placed,
   night,
   blend,
-  guideActive,
-  guidancePulse,
   celestial,
 }) {
   let sun = useRef(),
@@ -265,14 +263,13 @@ function SunMoon({
     moon.current.position.y -= 45 * (1 - state.moon);
     moon.current.quaternion.copy(camera.quaternion);
     moon.current.visible = placed && state.moon > 0.005;
-    const fade = guideActive ? 1 - guidancePulse.current * 0.85 : 1;
     sun.current.traverse((node) => {
       if (node.isMesh)
         (Array.isArray(node.material)
           ? node.material
           : [node.material]
         ).forEach((material) => {
-          const opacity = (placed ? 1 : 0.24) * fade;
+          const opacity = placed ? 1 : 0.24;
           if (material.uniforms?.sunOpacity)
             material.uniforms.sunOpacity.value = opacity;
           else material.opacity = opacity;
@@ -280,7 +277,7 @@ function SunMoon({
     });
     moon.current.traverse((node) => {
       if (node.isMesh && node.material.uniforms?.moonOpacity)
-        node.material.uniforms.moonOpacity.value = fade;
+        node.material.uniforms.moonOpacity.value = 1;
     });
   });
   return (
@@ -319,25 +316,106 @@ function SunMoon({
     </group>
   );
 }
+// Soft perimeter halos keep the fragment models themselves steady.
+function GuidanceHalo({ position, size, ground = false, square = false, pulse }) {
+  const mesh = useRef();
+  const uniforms = useMemo(
+    () => ({
+      strength: { value: 1 },
+      square: { value: square ? 1 : 0 },
+      haloColor: { value: new THREE.Color("#e5d9b9") },
+    }),
+    [square],
+  );
+  useFrame(({ camera }) => {
+    if (!ground) mesh.current.quaternion.copy(camera.quaternion);
+    uniforms.strength.value = pulse.current;
+  });
+  return (
+    <mesh
+      ref={mesh}
+      position={position}
+      scale={[...size, 1]}
+      rotation={ground ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}
+      renderOrder={20}
+      raycast={() => null}
+    >
+      <planeGeometry args={[1, 1]} />
+      <shaderMaterial
+        transparent
+        depthWrite={false}
+        depthTest={false}
+        toneMapped={false}
+        uniforms={uniforms}
+        vertexShader={`varying vec2 haloUv; void main() { haloUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position*1.35,1.); }`}
+        fragmentShader={`varying vec2 haloUv; uniform float strength; uniform float square; uniform vec3 haloColor;
+          void main() {
+            vec2 p=abs(haloUv*2.-1.)*1.35;
+            float d=mix(length(p),pow(pow(p.x,8.)+pow(p.y,8.),.125),square);
+            // A luminous core and broad falloff share the menu glow pulse.
+            float core=exp(-pow((d-.76)/.045,2.));
+            float ring=exp(-pow((d-.76)/.14,2.));
+            float haze=exp(-pow((d-.76)/.32,2.));
+            float inner=ring*(.18+strength*.34);
+            float outer=haze*(.10+strength*.18);
+            float center=core*(.16+strength*.30);
+            float alpha=1.-(1.-center)*(1.-inner)*(1.-outer);
+            vec3 color=mix(haloColor,vec3(1.),core*.32);
+            gl_FragColor=vec4(color,alpha);
+            #include <colorspace_fragment>
+          }`}
+      />
+    </mesh>
+  );
+}
+function GuidanceHalos({ placed, pulse }) {
+  return (
+    <>
+      {!placed.sky && (
+        <GuidanceHalo position={CELESTIAL_TOP} size={[6.8, 6.8]} pulse={pulse} />
+      )}
+      {!placed.north && (
+        <GuidanceHalo
+          position={[NORTH_POOL[0], 0.15, NORTH_POOL[2]]}
+          size={[21, 21]}
+          ground
+          square
+          pulse={pulse}
+        />
+      )}
+      {!placed.tree && (
+        <GuidanceHalo
+          position={[SURVIVOR_TREE[0], 2.5, SURVIVOR_TREE[2]]}
+          size={[8, 8]}
+          pulse={pulse}
+        />
+      )}
+      {!placed.street && (
+        <GuidanceHalo
+          position={[STREET_X, 0.15, CROSSWALK_Z]}
+          size={[9, 5]}
+          ground
+          square
+          pulse={pulse}
+        />
+      )}
+    </>
+  );
+}
 // plaza and model fallbacks
-function Ground({ sunny, streetPlaced, guideActive, guidancePulse }) {
+function Ground({ sunny, streetPlaced }) {
   const crosswalkMaterials = useRef([]);
   const streetMaterial = useRef(null);
   const laneMaterials = useRef({});
   useFrame(() => {
-    const fade = guideActive ? 1 - guidancePulse.current * 0.85 : 1;
     if (streetMaterial.current)
-      streetMaterial.current.opacity = streetPlaced ? 1 : 0.32 * fade;
+      streetMaterial.current.opacity = streetPlaced ? 1 : 0.32;
     Object.values(laneMaterials.current).forEach((material) => {
-      if (material) material.opacity = streetPlaced ? 0.4 : 0.32 * fade;
+      if (material) material.opacity = streetPlaced ? 0.4 : 0.32;
     });
     crosswalkMaterials.current.forEach((material) => {
       if (material)
-        material.opacity = streetPlaced
-          ? 0.85
-          : guideActive
-            ? 0.32 * (1 - guidancePulse.current * 0.85)
-            : 0.32;
+        material.opacity = streetPlaced ? 0.85 : 0.32;
     });
   });
   const streets = useMemo(
@@ -515,8 +593,6 @@ function Pool(props) {
         celestial={props.celestial}
         lightPosition={CELESTIAL_TOP}
         blend={props.blend}
-        guideActive={props.guideActive}
-        guidancePulse={props.guidancePulse}
       />
     </Suspense>
   );
@@ -1262,6 +1338,8 @@ export default function World3D({
   viewReset = 0,
   overlays,
   guideActive = false,
+  guideRun = 0,
+  guideMenuRef,
 }) {
   const blend = useRef(0);
   const celestial = useRef({
@@ -1275,6 +1353,9 @@ export default function World3D({
   });
   const guidancePulse = useRef(0);
   const guideElapsed = useRef(0);
+  useEffect(() => {
+    guideElapsed.current = 0;
+  }, [guideRun]);
   const reducedMotion = useMemo(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     [],
@@ -1284,8 +1365,13 @@ export default function World3D({
   useFrame((_, dt) => {
     guideElapsed.current = guideActive ? guideElapsed.current + dt : 0;
     guidancePulse.current = reducedMotion
-      ? 0.5
-      : 0.5 - 0.5 * Math.cos((guideElapsed.current * Math.PI * 2) / 1.8);
+      ? 1
+      : 0.5 + 0.5 * Math.cos((guideElapsed.current * Math.PI * 2) / 1.8);
+    if (guideMenuRef?.current)
+      guideMenuRef.current.style.setProperty(
+        "--guidance-pulse",
+        guideActive ? guidancePulse.current : 0,
+      );
     const state = celestial.current;
     const requested = !placed.sky
       ? "none"
@@ -1359,25 +1445,20 @@ export default function World3D({
         placed={placed.sky}
         night={period === "evening"}
         blend={blend}
-        guideActive={guideActive}
-        guidancePulse={guidancePulse}
         celestial={celestial}
       />
+      {guideActive && <GuidanceHalos placed={placed} pulse={guidancePulse} />}
       <SceneLighting daylight={daylight} blend={blend} celestial={celestial} />
       <DreamySurfaceLight celestial={celestial} lightPosition={CELESTIAL_TOP} />
       <Ground
         sunny={sunny}
         streetPlaced={placed.street}
-        guideActive={guideActive}
-        guidancePulse={guidancePulse}
       />
       <Suspense fallback={null}>
         <UploadedSkyline night={period === "evening"} />
       </Suspense>
       <Pool
         celestial={celestial}
-        guideActive={guideActive}
-        guidancePulse={guidancePulse}
         at={NORTH_POOL}
         active={placed.north}
         blend={blend}
@@ -1426,8 +1507,6 @@ export default function World3D({
         seed={392}
         scale={1.2}
         ghost={!placed.tree}
-        guideActive={guideActive}
-        guidancePulse={guidancePulse}
         night={period === "evening"}
         sunny={sunny}
       />

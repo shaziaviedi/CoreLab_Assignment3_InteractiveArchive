@@ -11,8 +11,6 @@ export default function ReferencePool({
   celestial,
   lightPosition,
   blend,
-  guideActive = false,
-  guidancePulse,
 }) {
   const gltf = useLoader(
     GLTFLoader,
@@ -141,9 +139,7 @@ export default function ReferencePool({
     if (!active)
       model.traverse((node) => {
         if (!node.isMesh || !node.visible) return;
-        const opacity = guideActive
-          ? 0.24 * (1 - (guidancePulse?.current ?? 0) * 0.85)
-          : 0.24;
+        const opacity = 0.24;
         (Array.isArray(node.material)
           ? node.material
           : [node.material]

@@ -11,8 +11,6 @@ export default function TexturedTree({
   night = false,
   survivor = false,
   bush = false,
-  guideActive = false,
-  guidancePulse,
 }) {
   const autumn = !survivor && !bush && Math.abs(seed) % 5 === 2;
   const asset = survivor
@@ -171,9 +169,7 @@ export default function TexturedTree({
     if (ghost)
       model.traverse((node) => {
         if (!node.isMesh) return;
-        const opacity = guideActive
-          ? 0.24 * (1 - (guidancePulse?.current ?? 0) * 0.85)
-          : 0.24;
+        const opacity = 0.24;
         (Array.isArray(node.material)
           ? node.material
           : [node.material]
