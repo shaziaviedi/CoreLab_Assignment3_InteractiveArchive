@@ -3,6 +3,8 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import WaterfallParticles from "./WaterfallParticles.jsx";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Color } from "three";
+import { POOL_SCALE } from "./scene/memorialLayout.js";
+import { measurePoolLayout } from "./scene/navigation.js";
 
 export default function ReferencePool({
   at,
@@ -11,6 +13,7 @@ export default function ReferencePool({
   celestial,
   lightPosition,
   blend,
+  onLayout,
 }) {
   const gltf = useLoader(
     GLTFLoader,
@@ -148,6 +151,9 @@ export default function ReferencePool({
         });
       });
   });
+  useEffect(() => {
+    if (onLayout) onLayout(measurePoolLayout(model));
+  }, [model, onLayout]);
   useEffect(
     () => () =>
       model.traverse((node) => {
@@ -160,7 +166,7 @@ export default function ReferencePool({
     [model],
   );
   return (
-    <group position={at} scale={1.4}>
+    <group position={at} scale={POOL_SCALE}>
       <primitive object={model} />
       {active && <WaterfallParticles night={night} />}
     </group>

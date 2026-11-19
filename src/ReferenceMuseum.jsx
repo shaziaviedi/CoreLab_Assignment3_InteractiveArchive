@@ -94,7 +94,7 @@ export default function ReferenceMuseum({ night }) {
     [model],
   );
   return (
-    <group position={[-24.43, 0, 21.14]} scale={1.4}>
+    <group position={[-24.43, 0, 21.14]} scale={1.4} userData={{ cameraObstacle: true }}>
       <primitive object={model} />
     </group>
   );

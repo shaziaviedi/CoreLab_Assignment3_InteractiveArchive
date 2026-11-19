@@ -27,6 +27,11 @@ import {
   fallFrag,
 } from "./SceneShaders.js";
 import { OBS } from "./data.js";
+import MemorialCameraRig from "./scene/MemorialCameraRig.jsx";
+import { OVERVIEW, NORTH_POOL, SOUTH_POOL, SURVIVOR_TREE, CAMERA_PRESETS } from "./scene/memorialLayout.js";
+import { MemorialHotspot, HotspotGlow } from "./scene/MemorialHotspots.jsx";
+import PoolPlacementPreview from "./scene/PoolPlacementPreview.jsx";
+export { OVERVIEW } from "./scene/memorialLayout.js";
 
 // layout and seeded planting
 const PI = Math.PI,
@@ -38,11 +43,6 @@ const hash = (x) => {
 };
 
 // map layout: north is -z, Greenwich is east (+x)
-export const OVERVIEW = { pos: [-11.5, 37, 55], target: [2, 8, -1] };
-// pool centres + pavilion transform measured from memorial-park-ref.glb
-const NORTH_POOL = [-6.42, 0.03, -9.93];
-const SOUTH_POOL = [6.41, 0.03, 9.92];
-const SURVIVOR_TREE = [-3, 0, 9.92];
 const STREET_X = 16.5;
 const CROSSWALK_Z = 1;
 const OCULUS = [27.6, 0.05, -8];
@@ -79,11 +79,7 @@ const ANCHORS = {
     card: "right",
   },
 };
-const CAMERA_PRESETS = {
-  north: { pos: [1, 2.7, -2], target: [-6.42, 0, -9.93] },
-  tree: { pos: [-8.5, 2.1, 18.5], target: [-3, 1.6, 9.92] },
-  street: { pos: [18, 1.75, 9], target: [16.5, 0.9, -6] },
-};
+
 
 const inBox = (x, z, c, r) => Math.abs(x - c[0]) < r && Math.abs(z - c[2]) < r;
 function nearSightline(x, z, { pos, target }) {
@@ -593,6 +589,7 @@ function Pool(props) {
         celestial={props.celestial}
         lightPosition={CELESTIAL_TOP}
         blend={props.blend}
+        onLayout={props.onLayout}
       />
     </Suspense>
   );
@@ -988,194 +985,6 @@ function People({ placed, period, paused }) {
     </group>
   );
 }
-// narrow screens: wider lens, then camera setback
-// camera controls
-const BASE_FOV = 42,
-  MAX_FOV = 75,
-  FIT_ASPECT = 1.3;
-const deg = THREE.MathUtils.degToRad;
-function Rig({ cameraZone, interactive, viewReset }) {
-  const { camera, gl } = useThree();
-  const orbit = useRef({
-    yaw: 0,
-    pitch: 0,
-    zoom: 1,
-    focus: new THREE.Vector3(...OVERVIEW.target),
-  });
-  const spherical = useMemo(() => new THREE.Spherical(), []);
-  useEffect(() => {
-    Object.assign(orbit.current, { yaw: 0, pitch: 0, zoom: 1 });
-    orbit.current.focus.set(...OVERVIEW.target);
-  }, [viewReset]);
-  useEffect(() => {
-    const canvas = gl.domElement;
-    if (cameraZone || !interactive) return;
-    const pointers = new Map();
-    const oldCursor = canvas.style.cursor,
-      oldTouch = canvas.style.touchAction;
-    canvas.style.cursor = "grab";
-    canvas.style.touchAction = "none";
-    const clamp = THREE.MathUtils.clamp;
-    const raycaster = new THREE.Raycaster();
-    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const cursor = new THREE.Vector2();
-    const groundAt = (x, y) => {
-      const rect = canvas.getBoundingClientRect();
-      cursor.set(
-        ((x - rect.left) / rect.width) * 2 - 1,
-        1 - ((y - rect.top) / rect.height) * 2,
-      );
-      raycaster.setFromCamera(cursor, camera);
-      return raycaster.ray.intersectPlane(ground, new THREE.Vector3());
-    };
-    const limitFocus = () => {
-      const focus = orbit.current.focus;
-      focus.x = clamp(focus.x, -48, 48);
-      focus.z = clamp(focus.z, -48, 38);
-      focus.y = clamp(focus.y, 0, 8);
-    };
-    const zoomAt = (factor, x, y) => {
-      const state = orbit.current;
-      const next = clamp(state.zoom * factor, 0.12, 1.25);
-      const anchor = groundAt(x, y);
-      // shift focus toward the ground point under the cursor
-      if (anchor)
-        state.focus.addScaledVector(
-          anchor.sub(state.focus),
-          1 - next / state.zoom,
-        );
-      state.zoom = next;
-      limitFocus();
-    };
-    const pan = (from, to) => {
-      const a = groundAt(from.x, from.y),
-        b = groundAt(to.x, to.y);
-      if (a && b) {
-        orbit.current.focus.addScaledVector(a.sub(b), 0.75);
-        limitFocus();
-      }
-    };
-    const distance = () => {
-      const [a, b] = [...pointers.values()];
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    };
-    const midpoint = () => {
-      const [a, b] = [...pointers.values()];
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    };
-    const down = (e) => {
-      if (e.button !== 0 && e.button !== 2) return;
-      pointers.set(e.pointerId, {
-        x: e.clientX,
-        y: e.clientY,
-        pan: e.button === 2 || e.shiftKey,
-      });
-      canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = "grabbing";
-    };
-    const move = (e) => {
-      const previous = pointers.get(e.pointerId);
-      if (!previous) return;
-      const before = pointers.size === 2 ? distance() : 0;
-      const oldCenter = pointers.size === 2 ? midpoint() : null;
-      const next = { x: e.clientX, y: e.clientY, pan: previous.pan };
-      pointers.set(e.pointerId, next);
-      if (pointers.size === 2) {
-        const after = distance(),
-          center = midpoint();
-        pan(oldCenter, center);
-        if (before > 0 && after > 0)
-          zoomAt(Math.pow(before / after, 0.65), center.x, center.y);
-      } else if (pointers.size === 1) {
-        if (previous.pan) pan(previous, next);
-        else {
-          orbit.current.yaw = clamp(
-            orbit.current.yaw - (e.clientX - previous.x) * 0.0012,
-            -0.45,
-            0.45,
-          );
-          orbit.current.pitch = clamp(
-            orbit.current.pitch + (e.clientY - previous.y) * 0.0009,
-            -0.22,
-            0.15,
-          );
-        }
-      }
-    };
-    const up = (e) => {
-      pointers.delete(e.pointerId);
-      if (canvas.hasPointerCapture(e.pointerId))
-        canvas.releasePointerCapture(e.pointerId);
-      canvas.style.cursor = pointers.size ? "grabbing" : "grab";
-    };
-    const wheel = (e) => {
-      e.preventDefault();
-      const delta =
-        e.deltaY *
-        (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1);
-      zoomAt(Math.exp(clamp(delta, -180, 180) * 0.00055), e.clientX, e.clientY);
-    };
-    const context = (e) => e.preventDefault();
-    canvas.addEventListener("contextmenu", context);
-    canvas.addEventListener("pointerdown", down);
-    canvas.addEventListener("pointermove", move);
-    canvas.addEventListener("pointerup", up);
-    canvas.addEventListener("pointercancel", up);
-    canvas.addEventListener("lostpointercapture", up);
-    canvas.addEventListener("wheel", wheel, { passive: false });
-    return () => {
-      canvas.removeEventListener("contextmenu", context);
-      canvas.removeEventListener("pointerdown", down);
-      canvas.removeEventListener("pointermove", move);
-      canvas.removeEventListener("pointerup", up);
-      canvas.removeEventListener("pointercancel", up);
-      canvas.removeEventListener("lostpointercapture", up);
-      canvas.removeEventListener("wheel", wheel);
-      for (const id of pointers.keys())
-        if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
-      canvas.style.cursor = oldCursor;
-      canvas.style.touchAction = oldTouch;
-    };
-  }, [gl, cameraZone, interactive, viewReset]);
-  let look = useRef(new THREE.Vector3(...OVERVIEW.target));
-  const goal = useMemo(() => new THREE.Vector3(), []);
-  const aim = useMemo(() => new THREE.Vector3(), []);
-  useFrame((_, dt) => {
-    const s = (cameraZone && CAMERA_PRESETS[cameraZone]) || OVERVIEW;
-    const halfTan =
-      Math.tan(deg(BASE_FOV / 2)) * Math.max(1, FIT_ASPECT / camera.aspect);
-    const maxTan = Math.tan(deg(MAX_FOV / 2));
-    camera.fov = THREE.MathUtils.radToDeg(
-      2 * Math.atan(Math.min(halfTan, maxTan)),
-    );
-    const pullBack = cameraZone ? 1 : Math.max(1, halfTan / maxTan);
-    aim.set(...s.target);
-    goal
-      .set(...s.pos)
-      .sub(aim)
-      .multiplyScalar(pullBack)
-      .add(aim);
-    if (!cameraZone) {
-      spherical.setFromVector3(goal.sub(aim));
-      spherical.theta += orbit.current.yaw;
-      spherical.phi = THREE.MathUtils.clamp(
-        spherical.phi + orbit.current.pitch,
-        0.5,
-        1.35,
-      );
-      spherical.radius *= orbit.current.zoom;
-      aim.copy(orbit.current.focus);
-      goal.setFromSpherical(spherical).add(aim);
-    }
-    // frame-rate-independent easing, with capped resume delta
-    const k = 1 - Math.exp(-Math.min(dt, 0.05) * (cameraZone ? 1.2 : 1.7));
-    camera.position.lerp(goal, k);
-    look.current.lerp(aim, k);
-    camera.lookAt(look.current);
-    camera.updateProjectionMatrix();
-  });
-  return null;
-}
 // overlay projection
 const _anchor = new THREE.Vector3();
 function ScreenAnchors({ overlays }) {
@@ -1340,6 +1149,16 @@ export default function World3D({
   guideActive = false,
   guideRun = 0,
   guideMenuRef,
+  mode,
+  hasSelectedFragment,
+  poolStep,
+  poolLayout,
+  onPoolLayout,
+  gesture,
+  onEnterInteraction,
+  onHotspotHover,
+  onTransitionChange,
+  onSelectAnchor,
 }) {
   const blend = useRef(0);
   const celestial = useRef({
@@ -1429,8 +1248,13 @@ export default function World3D({
   return (
     <>
       <color attach="background" args={["#a8bad4"]} />
-      <Rig
+      <MemorialCameraRig
         cameraZone={cameraZone}
+        mode={mode}
+        poolLayout={poolLayout}
+        poolStep={poolStep}
+        gesture={gesture}
+        onTransitionChange={onTransitionChange}
         interactive={interactive}
         viewReset={viewReset}
       />
@@ -1457,15 +1281,29 @@ export default function World3D({
       <Suspense fallback={null}>
         <UploadedSkyline night={period === "evening"} />
       </Suspense>
-      <Pool
-        celestial={celestial}
-        at={NORTH_POOL}
-        active={placed.north}
-        blend={blend}
-        index={1}
-        sunny={sunny}
-        night={period === "evening"}
-      />
+      <MemorialHotspot
+        zone="north"
+        enabled={interactive && mode === "main" && placed.north && Boolean(poolLayout) && !hasSelectedFragment}
+        gesture={gesture}
+        onEnter={onEnterInteraction}
+        onHover={onHotspotHover}
+      >
+        {(hovered) => (
+          <>
+            <Pool
+              celestial={celestial}
+              at={NORTH_POOL}
+              active={placed.north}
+              blend={blend}
+              index={1}
+              sunny={sunny}
+              night={period === "evening"}
+              onLayout={onPoolLayout}
+            />
+            {hovered && <HotspotGlow zone="north" layout={poolLayout} />}
+          </>
+        )}
+      </MemorialHotspot>
       <Pool
         celestial={celestial}
         at={SOUTH_POOL}
@@ -1501,15 +1339,37 @@ export default function World3D({
           />
         ))}
       </Suspense>
-      <Tree
-        position={SURVIVOR_TREE}
-        survivor
-        seed={392}
-        scale={1.2}
-        ghost={!placed.tree}
-        night={period === "evening"}
-        sunny={sunny}
-      />
+      <MemorialHotspot
+        zone="tree"
+        enabled={interactive && mode === "main" && placed.tree && !hasSelectedFragment}
+        gesture={gesture}
+        onEnter={onEnterInteraction}
+        onHover={onHotspotHover}
+      >
+        {(hovered) => (
+          <>
+            <Tree
+              position={SURVIVOR_TREE}
+              survivor
+              seed={392}
+              scale={1.2}
+              ghost={!placed.tree}
+              night={period === "evening"}
+              sunny={sunny}
+            />
+            {hovered && <HotspotGlow zone="tree" />}
+          </>
+        )}
+      </MemorialHotspot>
+      {mode === "pool" && (
+        <PoolPlacementPreview
+          layout={poolLayout}
+          step={poolStep}
+          enabled={interactive}
+          gesture={gesture}
+          onSelect={onSelectAnchor}
+        />
+      )}
       <Suspense fallback={<PlaceholderMuseum />}>
         <ReferenceMuseum night={period === "evening"} />
       </Suspense>

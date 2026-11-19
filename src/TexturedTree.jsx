@@ -182,7 +182,7 @@ export default function TexturedTree({
         Math.sin(clock.elapsedTime * 0.5 + seed) * 0.007;
   });
   return (
-    <group position={position} scale={scale} rotation={[0, seed * 2.4, 0]}>
+    <group position={position} scale={scale} rotation={[0, seed * 2.4, 0]} userData={{ cameraObstacle: true }}>
       <group ref={group}>
         <primitive object={model} />
       </group>

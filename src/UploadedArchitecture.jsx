@@ -102,7 +102,7 @@ export function UploadedOculus({ position, night }) {
   }, [gltf, night]);
   useEffect(() => () => disposeMaterials(model), [model]);
   return (
-    <group position={position}>
+    <group position={position} userData={{ cameraObstacle: true }}>
       <primitive object={model} />
     </group>
   );

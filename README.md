@@ -67,3 +67,267 @@
 - **Captured photos currently stay in memory.**
   - They appear in the archive during the session.
   - Refreshing the page clears them.
+
+## Collaborative memorial backend
+
+The backend runs separately from Vite. It provides anonymous memorial rooms,
+visitor presence, Survivor Tree notes, and North Pool flower placements. The React
+scene connects through a collaboration provider. Shared state and visitor identity
+are integrated; tree-note and flower-placement interfaces will be added separately.
+
+### Start locally
+
+Use Node.js **22.9 or newer** and install dependencies with `npm install`.
+
+```sh
+cp .env.example .env
+npm run server:dev
+```
+
+The backend defaults to `http://localhost:3001`. Check it with
+`curl http://localhost:3001/health`. Run `npm run dev` in another terminal for the
+existing frontend. `npm run server` starts the backend without file watching;
+`npm test` runs the backend tests with real Socket.io clients.
+
+Environment settings:
+
+- `PORT`: backend listening port; defaults to `3001`.
+- `VITE_SOCKET_URL`: public backend URL compiled into the frontend. Development
+  defaults to `http://localhost:3001`; production builds require this setting.
+  Restart Vite after editing `.env` and rebuild after changing a deployed URL.
+- `CORS_ORIGINS`: comma-separated exact allowed browser origins. Defaults to
+  `http://localhost:5173,http://127.0.0.1:5173` when unset. Add the actual frontend
+  origin for deployment, for example `https://your-username.github.io`, **without
+  the repository path or a trailing slash**. Replace the placeholder in `.env.example`.
+- `CONTRIBUTION_LIMIT`: combined note/flower attempts allowed per socket in each
+  rate window; defaults to `6`.
+- `CONTRIBUTION_WINDOW_MS`: rate-window duration; defaults to `60000`.
+
+The server checks browser origins for HTTP requests, Socket.io polling, and
+WebSocket handshakes. Requests without an Origin header are allowed for CLI/native
+clients. Origin checks are not authentication. Room IDs are case-sensitive,
+shareable identifiers, not secrets or private-room access controls.
+
+GitHub Pages hosts the frontend only. Deploy the backend to a Node service that
+supports long-lived connections, set its environment variables, and use HTTPS for
+the backend when the frontend uses HTTPS. This implementation uses one server
+process; multiple instances would require shared storage and a Socket.io adapter.
+
+### Organization
+
+- `shared/protocol.js`: event names, known avatars/zones/sides, and text limits.
+- `shared/memorialLayout.js`: versioned note and flower anchor IDs.
+- `server/index.js`: environment-driven startup and shutdown.
+- `server/app.js`: Express health endpoint, origins, HTTP server, and Socket.io.
+- `server/config.js`: environment parsing and validation.
+- `server/validation.js`: payload allowlists and input validation.
+- `server/sockets/registerHandlers.js`: Socket.io events and acknowledgements.
+- `server/services/roomService.js`: visitor membership and room snapshots.
+- `server/services/placementService.js`: rate limits, retries, and contributions.
+- `server/storage/contributionRepository.js`: process-local room storage.
+- `server/tests/collaboration.test.js`: HTTP and Socket.io integration tests.
+
+### Socket contract
+
+Every request supports an acknowledgement callback. Success returns
+`{ ok: true, ... }`; failure returns
+`{ ok: false, error: { code, message, ...details } }`.
+
+**Join and presence**
+
+- Send `room:join` with `{ roomId, visitorId?, username, avatarType, currentZone? }`.
+  Room IDs allow 1–64 ASCII letters, digits, hyphens, or underscores. Usernames
+  must be nonblank and at most 24 Unicode code points. Avatar types are `male`
+  and `female`; zones are `overview`, `tree`, `north`, and `street`.
+- The acknowledgement contains `{ ok: true, visitor, state }`. The joining socket
+  also receives `room:state` with
+  `{ roomId, layoutVersion, revision, visitors, notes, flowers }`.
+- The server records each visitor as
+  `{ socketId, visitorId, username, avatarType, currentZone, joinedAt }`.
+- A saved UUID v4 may be supplied as `visitorId`; otherwise the server generates
+  one. This is anonymous continuity, not proof of identity or authentication.
+- Send `presence:update` with any of `{ currentZone, username, avatarType }`.
+  Profile edits preserve socket ID, visitor ID, and join time. The server broadcasts
+  `{ roomId, visitor }` through `presence:update` to that room, including the sender.
+  A successful join broadcasts the same event.
+- Send `presence:leave` with `{}` to leave explicitly. Disconnecting or joining
+  another room also removes the old presence and broadcasts `presence:leave`
+  with `{ roomId, socketId, visitorId }` to the remaining visitors.
+- Each socket belongs to at most one memorial room. An invalid join leaves the
+  previous membership intact. A visitor ID survives room switches on the same
+  socket. Reconnect by sending `room:join` with the saved visitor ID and replacing
+  local room data with the fresh snapshot. Without a saved ID, a new connection
+  receives a new identity.
+
+**Notes and flowers**
+
+- Send `note:create` with `{ requestId, text, anchorId }`. Note text must be
+  nonblank and at most 180 Unicode code points. Valid anchors are `tree-01`
+  through `tree-24`.
+- Send `flower:create` with `{ requestId, poolSide, anchorId }`. Pool sides are
+  `north`, `east`, `south`, and `west`. Each side has 12 anchors, for example
+  `north-pool-east-01` through `north-pool-east-12`.
+- These slot IDs are the placement contract. Their visual transforms will be
+  calibrated when the scene integration is implemented. Clients must import the
+  shared anchor definitions rather than inventing coordinates. All coordinate
+  fields and other unexpected fields are rejected, including author overrides,
+  dedication, message text on flowers, recipient name, and flower selection.
+- `requestId` is a client-generated retry identifier of 1–80 ASCII letters,
+  digits, hyphens, or underscores. Contribution IDs and ISO 8601 timestamps are
+  always generated by the server.
+- Accepted notes contain
+  `{ id, roomId, authorId, authorName, authorAvatar, text, anchorId, createdAt }`.
+- Accepted flowers contain only
+  `{ id, roomId, authorId, authorName, authorAvatar, poolSide, anchorId, createdAt }`.
+  Every flower uses the same future visual model; no flower type is stored.
+- Success acknowledges `{ ok: true, record, revision, duplicate }`. Accepted
+  contributions broadcast to **every socket in the room, including the sender**:
+  `note:created` contains `{ roomId, revision, note }`; `flower:created` contains
+  `{ roomId, revision, flower }`. Clients should upsert by record ID to avoid
+  rendering both the broadcast and acknowledgement as separate contributions.
+- Contribution failures also send `placement:error` to the requester with
+  `{ ok: false, event, requestId, error }`. They are never broadcast to peers.
+
+Example from a Socket.io client:
+
+```js
+socket.emit("room:join", {
+  roomId: "memorial",
+  username: "Visitor",
+  avatarType: "female",
+}, (result) => console.log(result));
+
+socket.emit("flower:create", {
+  requestId: crypto.randomUUID(),
+  poolSide: "north",
+  anchorId: "north-pool-north-01",
+}, (result) => console.log(result));
+```
+
+### Conflicts, retries, and storage
+
+Occupancy checks and inserts are synchronous in the storage layer. If two visitors
+request the same anchor, the first valid request succeeds and the other receives
+`ANCHOR_OCCUPIED`, with the anchor ID and a message to choose another position.
+An anchor can be used independently in different rooms. Changing camera views or
+leaving a room does not remove its contributions.
+
+Repeat a successful request with the **same requestId and payload** to retrieve the
+original record without a second insert, broadcast, or rate-limit charge. Reusing
+that requestId for another payload returns `REQUEST_ID_REUSED`. A rejected request
+does not reserve its request ID, so the visitor can choose another anchor.
+Idempotency is scoped to the visitor and room; supplying the saved visitor ID
+preserves successful retry history across reconnects until the server restarts.
+
+New valid or invalid contribution attempts share the socket rate allowance across
+room changes. A limit failure returns `RATE_LIMITED` and `retryAfterMs`. Successful
+retries are exempt. This is basic connection-level limiting; reconnecting creates
+a new allowance. Other errors include `NOT_IN_ROOM`, `INVALID_PAYLOAD`,
+`INVALID_TEXT`, `INVALID_ROOM`, `INVALID_CHOICE`, and `INVALID_REQUEST_ID`.
+
+User strings are stored and sent as literal plain text, including any characters
+that resemble HTML. Future React clients must render them as text children and
+must never use `dangerouslySetInnerHTML` for usernames or notes.
+
+`revision` increments for accepted contributions only. The join snapshot is sent
+before subsequent room events on that connection. Use it to replace stale state
+after reconnecting; this version does not replay missed events automatically.
+
+**All visitors, notes, flowers, occupied anchors, and retry records are held in
+memory. Contributions disappear when the server restarts**, including a restart
+triggered by development watch mode. Empty rooms retain their contributions until
+then. The repository separates storage from socket handling so database persistence
+can be added later. A database implementation must preserve atomic occupancy and
+request-ID uniqueness rather than replacing them with separate asynchronous reads
+and writes.
+
+### React visitor identity and connection
+
+First-time visitors enter a username and select a male or female avatar in a
+translucent overlay above the existing environment. Both previews reuse
+`AnimatedVisitor` and the existing character GLBs. The profile is saved under
+`elsewhere:visitor:v1` in localStorage, with a stable UUID v4. If storage is blocked,
+the experience still works for the current visit and reports that the profile
+could not be saved. Returning visitors retain the existing arrival flow.
+
+The small connection control shows connection status and the count of connected
+browser sessions. Expand it to see usernames and avatar selections; click your
+name to edit your profile. Tabs on the same origin share the saved profile and
+synchronize edits through the browser storage event. Each tab has a separate
+socket presence, even if its saved visitor ID is the same.
+
+Use `?room=your-room` to share a room. Omitting it joins `memorial`; an invalid
+room ID displays an error instead of silently joining another room.
+
+- `src/collaboration/CollaborationProvider.jsx`: identity, room, and shared context.
+- `src/collaboration/useMemorialSocket.js`: one connection per identity/room,
+  listeners, fresh snapshots on reconnect, and explicit cleanup with `socket.off`.
+- `src/collaboration/identity.js`: validated localStorage profile and room parsing.
+- `src/collaboration/socket.js`: backend URL and reconnect configuration.
+- `src/collaboration/components/`: entry, avatar previews, connection status,
+  presence list, and local-zone reporting.
+- `src/styles/collaboration.css`: scoped styles for the new controls.
+
+The hook uses separate React state for notes, flowers, visitors, and connection
+status. It upserts shared contributions by server ID; flower author information
+and server timestamps are retained unchanged for future hover labels. No note or
+flower placement UI is implemented yet. Cameras, puzzle progress, sun/moon,
+observation playback, and photos remain local. Opening the profile dialog blocks
+scene input without resetting or unmounting the memorial.
+
+For a manual two-visitor check, start both servers, then open two browser windows
+with the same room query. Use separate browser profiles/private windows for
+independent identities, or use `localhost:5173` and `127.0.0.1:5173` locally.
+Enter different names and avatars, expand the presence controls, and verify both
+windows show two visitors. Edit one profile, refresh, and restart the backend to
+check profile synchronization, saved identity, and automatic room rejoining.
+
+### Immersive memorial navigation
+
+Place the Tree or Pool puzzle fragment to unlock its interaction hotspot. Hover
+the actual 3D tree or North Pool to reveal a restrained ground/perimeter glow,
+an eye cursor, and “Leave a message” or “Leave a flower.” Click to enter. Keyboard
+users can Tab to equivalent interaction links that become visible on focus.
+
+- **Main view:** retains the existing rotate, pan, and zoom controls. Returning
+  from an interaction keeps the previous map framing.
+- **Survivor Tree:** a close-up view supports bounded horizontal mouse/touch drag.
+  Distance and elevation are constrained; planting and building bounds provide
+  additional camera clearance. The future message-installation area remains in
+  the framing; this step does not add the installation or note-placement UI.
+- **North Pool:** previous/next controls move through north, east, south, and west
+  viewpoints, labeled 1/4–4/4. Side changes follow a rounded path outside the basin,
+  including wraparound. Controls wait for the current transition to finish.
+- **Photography:** existing camera pins still open their original photo presets.
+  “Photograph this place” also enters photography from an interaction view;
+  returning restores that interaction and its orbit/side. Shutter and personal
+  archive behavior are retained. Escape closes the archive before leaving a view.
+
+The pool layout is measured from `pool-part-18` in the loaded pool model, after its
+world transform and 1.4 scale are applied. A downward raycast locates every anchor
+on the actual parapet surface. The active side displays temporary placement
+targets: hover shows a ring, and clicking selects a local preview marker. These
+clicks do not create a server contribution or open a form.
+
+Navigation code is separated under `src/scene/`:
+
+- `memorialLayout.js`: original landmark coordinates and photography presets.
+- `MemorialCameraRig.jsx`: the single camera writer, existing map controls,
+  bounded tree orbit, side travel, transitions, and obstacle clearance.
+- `navigation.js`: geometry measurement, camera paths, and collision helpers.
+- `useInteractionMode.js`: shared gesture state and click-versus-drag checks.
+- `MemorialHotspots.jsx`: model pointer events, eye cursor, and hover glow.
+- `PoolPlacementPreview.jsx`: parapet anchor hit targets and local markers.
+- `MemorialNavigation.jsx`: minimal interaction-view controls.
+
+Puzzle controls are hidden and puzzle mutations are guarded inside interaction
+views. Native camera listeners and Fiber click handlers share the same gesture
+state: dragging, multi-touch, cancelled gestures, puzzle drags, and transitions
+cannot also select a placement. Profile dialogs and the archive block scene input.
+Remote room updates do not reset the camera or start another transition.
+
+`npm test` also runs mounted Fiber camera tests through every pair of map, tree,
+pool-side, and photography modes; mouse/touch orbit; pool wraparound; hover/click
+guards; preview selection; and contribution-driven rerenders. Geometry tests read
+the actual GLB, validate all 48 anchor hits, and check camera paths and central
+parapet framing. These tests do not replace visual checks of the full environment.

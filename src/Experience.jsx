@@ -6,8 +6,11 @@ import World3D, { OVERVIEW } from "./World3D.jsx";
 import { FRAGMENTS, ZONENAMES, LABELS } from "./data.js";
 
 import { Icon, Slot, ZoneStats, Archive } from "./ExperienceUI.jsx";
+import { VisitorZone } from "./collaboration/components/VisitorPresence.jsx";
+import useInteractionMode from "./scene/useInteractionMode.js";
+import MemorialNavigation from "./scene/MemorialNavigation.jsx";
 
-export default function Experience({ preview = false }) {
+export default function Experience({ preview = false, interactionBlocked = false }) {
   const [placed, setPlaced] = useState({
     sky: false,
     north: false,
@@ -18,6 +21,13 @@ export default function Experience({ preview = false }) {
   const [selected, setSelected] = useState(null);
   const [paused, setPaused] = useState(false);
   const [cameraZone, setCameraZone] = useState(null);
+  const [interactionZone, setInteractionZone] = useState(null);
+  const [photoOrigin, setPhotoOrigin] = useState(null);
+  const [poolStep, setPoolStep] = useState(0);
+  const [poolLayout, setPoolLayout] = useState(null);
+  const [transitioning, setTransitioning] = useState(true);
+  const [hotspotHint, setHotspotHint] = useState(null);
+  const gesture = useInteractionMode();
   const [viewReset, setViewReset] = useState(0);
   const [hoveredZone, setHoveredZone] = useState(null);
   const [photos, setPhotos] = useState([]);
@@ -41,6 +51,9 @@ export default function Experience({ preview = false }) {
     else delete overlays.current[key];
   };
   const period = timeFrag === "moon" ? "evening" : "afternoon";
+  const mode = cameraZone ? "photo" : interactionZone === "tree" ? "tree" :
+    interactionZone === "north" ? "pool" : "main";
+  const sceneInteractive = !preview && !interactionBlocked && !archiveOpen;
   const say = useCallback((message, duration = 3100) => {
     setToast(message);
     setToastDuration(duration);
@@ -49,6 +62,23 @@ export default function Experience({ preview = false }) {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), duration);
   }, []);
+  const enterInteraction = useCallback((zone) => {
+    setInteractionZone(zone);
+    setCameraZone(null);
+    setPhotoOrigin(null);
+    setSelected(null);
+    setDockOpen(false);
+    setHoveredZone(null);
+    setHotspotHint(null);
+  }, []);
+  const selectAnchor = useCallback((anchor) => {
+    say("Position selected · " + anchor.id);
+  }, [say]);
+  function leavePhoto() {
+    setCameraZone(null);
+    setInteractionZone(photoOrigin);
+    setPhotoOrigin(null);
+  }
   useEffect(
     () => () => {
       clearTimeout(guideTimer.current);
@@ -68,6 +98,7 @@ export default function Experience({ preview = false }) {
   }
   const place = useCallback(
     (fragment, target, dropped = false) => {
+      if (mode !== "main" || interactionBlocked || archiveOpen) return;
       // sky replacement requires a deliberate drag
       if (target === "sky" && placed.sky && !dropped) {
         say("Drag the sun or moon onto the sky to replace it.");
@@ -96,7 +127,7 @@ export default function Experience({ preview = false }) {
                 : " placed. Add the sun or moon to reveal observations."),
       );
     },
-    [say, placed.sky],
+    [say, placed.sky, mode, interactionBlocked, archiveOpen],
   );
   function choose(p) {
     if (p.target === "sky" && placed.sky) {
@@ -146,7 +177,17 @@ export default function Experience({ preview = false }) {
   }
   useEffect(() => {
     function key(e) {
+      if (interactionBlocked) return;
       if (e.key === "Escape") {
+        if (archiveOpen) {
+          setArchiveOpen(false);
+          return;
+        }
+        if (cameraZone) {
+          leavePhoto();
+          return;
+        }
+        setInteractionZone(null);
         setCameraZone(null);
         setArchiveOpen(false);
         setSelected(null);
@@ -155,9 +196,10 @@ export default function Experience({ preview = false }) {
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, []);
+  }, [interactionBlocked, archiveOpen, cameraZone, photoOrigin]);
   return (
     <main className="app">
+      <VisitorZone zone={cameraZone ?? interactionZone ?? "overview"} />
       <div className="three-stage">
         <Canvas
           shadows
@@ -180,7 +222,17 @@ export default function Experience({ preview = false }) {
             placed={placed}
             period={period}
             paused={preview || paused}
-            interactive={!preview}
+            interactive={sceneInteractive}
+            mode={mode}
+            hasSelectedFragment={Boolean(selected)}
+            poolStep={poolStep}
+            poolLayout={poolLayout}
+            onPoolLayout={setPoolLayout}
+            gesture={gesture}
+            onEnterInteraction={enterInteraction}
+            onHotspotHover={setHotspotHint}
+            onTransitionChange={setTransitioning}
+            onSelectAnchor={selectAnchor}
             viewReset={viewReset}
             cameraZone={cameraZone}
             overlays={overlays}
@@ -192,7 +244,7 @@ export default function Experience({ preview = false }) {
       </div>
       <div className="film-grain" />
       <div className="vignette" />
-      {!cameraZone && !archiveOpen && (
+      {mode === "main" && !archiveOpen && (
         <>
           <div className="corner-notation">
             <b>Elsewhere.</b>
@@ -233,6 +285,7 @@ export default function Experience({ preview = false }) {
                   onBlur={() => setHoveredZone(null)}
                   onClick={() => {
                     setHoveredZone(null);
+                    setPhotoOrigin(null);
                     setCameraZone(id);
                   }}
                 >
@@ -261,6 +314,8 @@ export default function Experience({ preview = false }) {
                 setTimeFrag(null);
                 setSelected(null);
                 setCameraZone(null);
+                setInteractionZone(null);
+                setPhotoOrigin(null);
                 setHoveredZone(null);
                 setViewReset((value) => value + 1);
                 say("The moment begins again.");
@@ -316,6 +371,11 @@ export default function Experience({ preview = false }) {
                       }
                       draggable
                       onDragStart={(e) => {
+                        if (mode !== "main") {
+                          e.preventDefault();
+                          return;
+                        }
+                        gesture.current.fragmentDragging = true;
                         e.dataTransfer.setData("text/plain", f.id);
                         e.dataTransfer.effectAllowed = "move";
                         const card = e.currentTarget;
@@ -325,6 +385,7 @@ export default function Experience({ preview = false }) {
                           card.offsetHeight / 2,
                         );
                       }}
+                      onDragEnd={() => { gesture.current.fragmentDragging = false; }}
                       onClick={() => choose(f)}
                       title={"Place " + f.label}
                     >
@@ -338,6 +399,10 @@ export default function Experience({ preview = false }) {
               </div>
             </nav>
           </div>
+          <nav className="memorial-access" aria-label="Memorial interaction views">
+            {placed.tree && <button onClick={() => enterInteraction("tree")} disabled={transitioning}>Leave a message at the Survivor Tree</button>}
+            {placed.north && poolLayout && <button onClick={() => enterInteraction("north")} disabled={transitioning}>Leave a flower at the North Pool</button>}
+          </nav>
           {photos.length > 0 && (
             <button
               className="archive-open"
@@ -353,6 +418,27 @@ export default function Experience({ preview = false }) {
           )}
         </>
       )}
+      {interactionZone && !cameraZone && !archiveOpen && (
+        <MemorialNavigation
+          zone={interactionZone}
+          step={poolStep}
+          transitioning={transitioning}
+          onStep={(direction) => {
+            if (!transitioning) setPoolStep((step) => step + direction);
+          }}
+          onBack={() => setInteractionZone(null)}
+          onPhoto={() => {
+            setPhotoOrigin(interactionZone);
+            setCameraZone(interactionZone);
+            setInteractionZone(null);
+          }}
+        />
+      )}
+      {hotspotHint && mode === "main" && !archiveOpen && (
+        <div className="memorial-hotspot-hint" style={{ left: Math.min(hotspotHint.x + 22, window.innerWidth - 160), top: Math.max(16, hotspotHint.y - 34) }}>
+          {hotspotHint.zone === "tree" ? "Leave a message" : "Leave a flower"}
+        </div>
+      )}
       {cameraZone && !archiveOpen && (
         <>
           <div className="viewer-cover" />
@@ -365,9 +451,9 @@ export default function Experience({ preview = false }) {
             <div className="viewer-controls">
               <button
                 className="viewer-back"
-                onClick={() => setCameraZone(null)}
+                onClick={leavePhoto}
               >
-                ← Return to map
+                {photoOrigin ? "Return to interaction" : "← Return to map"}
               </button>
               <button
                 className="shutter"

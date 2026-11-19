@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import Experience from "./Experience.jsx";
+import CollaborationProvider, { useCollaboration } from "./collaboration/CollaborationProvider.jsx";
+import VisitorEntry from "./collaboration/components/VisitorEntry.jsx";
+import CollaborationStatus from "./collaboration/components/CollaborationStatus.jsx";
 
 export default function App() {
+  return (
+    <CollaborationProvider>
+      <MemorialApp />
+    </CollaborationProvider>
+  );
+}
+
+function MemorialApp() {
+  const { identity, updateIdentity } = useCollaboration();
+  const [editingProfile, setEditingProfile] = useState(false);
   const [phase, setPhase] = useState("landing");
   const sceneRef = useRef(null);
 
@@ -26,12 +39,24 @@ export default function App() {
         className="experience-scene"
         ref={sceneRef}
         tabIndex={-1}
-        inert={phase !== "entered" ? "" : undefined}
-        aria-hidden={phase !== "entered"}
+        inert={phase !== "entered" || editingProfile ? "" : undefined}
+        aria-hidden={phase !== "entered" || editingProfile}
       >
-        <Experience preview={phase !== "entered"} />
+        <Experience preview={phase !== "entered"} interactionBlocked={editingProfile} />
       </div>
-      {phase !== "entered" && (
+      {(!identity || editingProfile) && (
+        <VisitorEntry
+          identity={identity}
+          onCancel={editingProfile ? () => setEditingProfile(false) : undefined}
+          onSave={(profile) => {
+            if (!updateIdentity(profile)) return false;
+            if (editingProfile) setEditingProfile(false);
+            else setPhase("entering");
+            return true;
+          }}
+        />
+      )}
+      {identity && phase !== "entered" && !editingProfile && (
         <main className="landing">
           <div className="landing-content">
             <p className="landing-eyebrow">An interactive memorial study</p>
@@ -48,6 +73,11 @@ export default function App() {
             </button>
           </div>
         </main>
+      )}
+      {identity && phase === "entered" && (
+        <div inert={editingProfile ? "" : undefined} aria-hidden={editingProfile}>
+          <CollaborationStatus onEdit={() => setEditingProfile(true)} />
+        </div>
       )}
       {phase === "entering" && (
         <div className="arrival-copy" role="status">
