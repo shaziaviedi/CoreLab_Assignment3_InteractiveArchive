@@ -1,5 +1,6 @@
-import { ACTIVITIES, AVATAR_TYPES, LIMITS, POOL_SIDES, ZONES } from "../shared/protocol.js";
-import { FLOWER_ANCHORS, NOTE_ANCHORS } from "../shared/memorialLayout.js";
+import { ACTIVITIES, AVATAR_TYPES, LIMITS, POOL_SIDES, ROSE_COLORS, ZONES } from "../shared/protocol.js";
+import { fencePlacement, placementFromId } from "../shared/fenceLayout.js";
+import { FLOWER_ANCHORS } from "../shared/memorialLayout.js";
 
 export class RequestError extends Error {
   constructor(code, message, details = {}) {
@@ -84,8 +85,8 @@ export function validateContribution(kind, payload) {
   validateFields(
     payload,
     kind === "note"
-      ? ["requestId", "anchorId", "text"]
-      : ["requestId", "anchorId", "poolSide", "roomId"],
+      ? ["requestId", "anchorId", "fencePosition", "text"]
+      : ["requestId", "anchorId", "poolSide", "roomId", "roseColor"],
   );
   if (
     typeof payload.requestId !== "string" ||
@@ -97,15 +98,20 @@ export function validateContribution(kind, payload) {
     );
   if (kind === "note") {
     const noteText = text(payload.text, LIMITS.note, "Note");
-    choice(payload.anchorId, NOTE_ANCHORS, "note anchor");
-    return { requestId: payload.requestId, anchorId: payload.anchorId, text: noteText };
+    const placement = payload.fencePosition !== undefined ? fencePlacement(payload.fencePosition) : placementFromId(payload.anchorId);
+    const named = payload.anchorId !== undefined ? placementFromId(payload.anchorId) : placement;
+    if (!placement || !named || named.angle !== placement.angle || named.height !== placement.height)
+      throw new RequestError("INVALID_CHOICE", "Unknown or out-of-bounds fence position.");
+    return { requestId: payload.requestId, anchorId: named.id,
+      fencePosition: placement.fencePosition, text: noteText };
   }
   if (payload.roomId !== undefined &&
     (typeof payload.roomId !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(payload.roomId)))
     throw new RequestError("INVALID_ROOM", "Unknown memorial room.");
   const poolSide = choice(payload.poolSide, POOL_SIDES, "pool side");
   choice(payload.anchorId, FLOWER_ANCHORS[poolSide], "flower anchor for this pool side");
-  return { requestId: payload.requestId, anchorId: payload.anchorId, poolSide };
+  const roseColor = choice(payload.roseColor === undefined ? "white" : payload.roseColor, ROSE_COLORS, "rose color");
+  return { requestId: payload.requestId, anchorId: payload.anchorId, poolSide, roseColor };
 }
 
 export function validateActivityZone(activity, zone) {

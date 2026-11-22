@@ -16,7 +16,7 @@ const BASE_FOV = 42,
   FIT_ASPECT = 1.3;
 const deg = THREE.MathUtils.degToRad;
 export default function MemorialCameraRig({
-  cameraZone, mode, poolLayout, poolStep, interactive, viewReset,
+  cameraZone, mode, treeClose = false, poolLayout, poolStep, interactive, viewReset,
   gesture, onTransitionChange,
 }) {
   const { camera, gl, scene } = useThree();
@@ -25,6 +25,7 @@ export default function MemorialCameraRig({
   const treeRadius = useRef(TREE_ORBIT_RADIUS);
   const displayedAngle = useRef(0);
   const treeView = mode === "tree" || (mode === "photo" && cameraZone === "tree");
+  const treeOrbit = mode === "tree" && treeClose;
   const obstacles = useRef([]);
   const obstacleCache = useRef(null);
   useEffect(() => {
@@ -48,11 +49,11 @@ export default function MemorialCameraRig({
   }, [viewReset]);
   useEffect(() => {
     const canvas = gl.domElement;
-    if (!interactive || (mode === "photo" && !treeView)) return;
+    if (!interactive || mode === "photo") return;
     const pointers = new Map();
     const oldCursor = canvas.style.cursor,
       oldTouch = canvas.style.touchAction;
-    canvas.style.cursor = mode === "pool" ? "default" : "grab";
+    canvas.style.cursor = mode === "pool" || (treeView && !treeOrbit) ? "default" : "grab";
     canvas.style.touchAction = "none";
     const clamp = THREE.MathUtils.clamp;
     const raycaster = new THREE.Raycaster();
@@ -129,9 +130,9 @@ export default function MemorialCameraRig({
       if (mode !== "main") {
         const before = pointers.size === 2 ? distance() : 0;
         pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (treeView && pointers.size === 1 && gesture.current.dragged)
+        if (treeOrbit && pointers.size === 1 && gesture.current.dragged)
           treeAngle.current -= (e.clientX - previous.x) * 0.006;
-        if (treeView && pointers.size === 2 && before > 0)
+        if (treeOrbit && pointers.size === 2 && before > 0)
           treeRadius.current = clamp(treeRadius.current * before / Math.max(1, distance()), 2.6, 3.5);
         return;
       }
@@ -172,11 +173,11 @@ export default function MemorialCameraRig({
     };
     const wheel = (e) => {
       e.preventDefault();
-      if (!gesture.current.ready || (mode !== "main" && !treeView)) return;
+      if (!gesture.current.ready || (mode !== "main" && !treeOrbit)) return;
       const delta =
         e.deltaY *
         (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1);
-      if (treeView) treeRadius.current = clamp(treeRadius.current * Math.exp(clamp(delta, -180, 180) * 0.0015), 2.6, 3.5);
+      if (treeOrbit) treeRadius.current = clamp(treeRadius.current * Math.exp(clamp(delta, -180, 180) * 0.0015), 2.6, 3.5);
       else zoomAt(Math.exp(clamp(delta, -180, 180) * 0.00055), e.clientX, e.clientY);
     };
     const context = (e) => e.preventDefault();
@@ -202,15 +203,15 @@ export default function MemorialCameraRig({
       canvas.style.cursor = oldCursor;
       canvas.style.touchAction = oldTouch;
     };
-  }, [gl, camera, mode, treeView, interactive, viewReset, gesture]);
+  }, [gl, camera, mode, treeView, treeOrbit, interactive, viewReset, gesture]);
   let look = useRef(new THREE.Vector3(...OVERVIEW.target));
   const goal = useMemo(() => new THREE.Vector3(), []);
   const aim = useMemo(() => new THREE.Vector3(), []);
   const position = useMemo(() => new THREE.Vector3(), []);
   useFrame((_, dt) => {
     if (obstacleCache.current) obstacles.current = obstacleCache.current.getBoxes(treeView);
-    const s = (cameraZone && CAMERA_PRESETS[cameraZone]) || OVERVIEW;
-    const baseFov = treeView ? 46 : mode === "pool" ? 50 : BASE_FOV;
+    const s = mode === "tree" ? CAMERA_PRESETS.tree : (cameraZone && CAMERA_PRESETS[cameraZone]) || OVERVIEW;
+    const baseFov = treeOrbit ? 46 : mode === "pool" ? 50 : BASE_FOV;
     const halfTan = Math.tan(deg(baseFov / 2)) * Math.max(1, FIT_ASPECT / camera.aspect);
     camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.min(halfTan, Math.tan(deg(MAX_FOV / 2)))));
     aim.set(...s.target);
@@ -223,8 +224,8 @@ export default function MemorialCameraRig({
       spherical.radius *= orbit.current.zoom;
       aim.copy(orbit.current.focus);
       goal.setFromSpherical(spherical).add(aim);
-    } else if (treeView) {
-      aim.set(SURVIVOR_TREE[0], 1.05, SURVIVOR_TREE[2]);
+    } else if (treeOrbit) {
+      aim.set(SURVIVOR_TREE[0], 0.56, SURVIVOR_TREE[2]);
       // Small angular steps keep rapid drags on a circular path, outside the trunk.
       if (reduced) displayedAngle.current = treeAngle.current;
       else displayedAngle.current += THREE.MathUtils.clamp(
@@ -237,7 +238,7 @@ export default function MemorialCameraRig({
       poolCameraPosition(poolLayout, poolStep, goal);
     }
     safeCameraPosition(goal, obstacles.current);
-    const key = `${mode}:${cameraZone ?? ""}:${poolStep}:${viewReset}`;
+    const key = `${mode}:${cameraZone ?? ""}:${treeOrbit}:${poolStep}:${viewReset}`;
     if (previousView.current?.key !== key) {
       const previous = previousView.current;
       transfer.current = {
@@ -256,6 +257,7 @@ export default function MemorialCameraRig({
       previousView.current = { key, mode, step: poolStep };
       settled.current = false;
       gesture.current.ready = false;
+      gesture.current.dragged = false;
       onTransitionChange(true);
     }
     const transition = transfer.current;

@@ -29,6 +29,7 @@ import {
 import { OBS } from "./data.js";
 import MemorialCameraRig from "./scene/MemorialCameraRig.jsx";
 import useReducedMotion from "./scene/useReducedMotion.js";
+import { TREE_INSTALLATION } from "../shared/memorialLayout.js";
 import { OVERVIEW, NORTH_POOL, SOUTH_POOL, SURVIVOR_TREE, CAMERA_PRESETS } from "./scene/memorialLayout.js";
 import { MemorialHotspot, HotspotGlow } from "./scene/MemorialHotspots.jsx";
 export { OVERVIEW } from "./scene/memorialLayout.js";
@@ -197,7 +198,8 @@ const PEDESTRIAN_OBSTACLES = [
     z,
     radius: [1.01, 1.69, 1.44, 0.98][i % 4] * (0.85 + hash(i + 27) * 0.3) + 0.3,
   })),
-  { x: SURVIVOR_TREE[0], z: SURVIVOR_TREE[2], radius: 0.85 },
+  // Reserve shoulder clearance around the lower message railing as well as bark.
+  { x: SURVIVOR_TREE[0], z: SURVIVOR_TREE[2], radius: TREE_INSTALLATION.visitorClearance },
   // 14 × 12 Oculus bounds, plus shoulder clearance
   { box: true, x: OCULUS[0], z: OCULUS[2], hx: 7.35, hz: 6.35 },
 ];
@@ -1150,6 +1152,7 @@ export default React.memo(function World3D({
   guideRun = 0,
   guideMenuRef,
   mode,
+  treeClose,
   hasSelectedFragment,
   poolStep,
   poolLayout,
@@ -1247,6 +1250,7 @@ export default React.memo(function World3D({
       <MemorialCameraRig
         cameraZone={cameraZone}
         mode={mode}
+        treeClose={treeClose}
         poolLayout={poolLayout}
         poolStep={poolStep}
         gesture={gesture}

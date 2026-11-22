@@ -35,16 +35,14 @@ export default function AvatarPreview({ avatarType }) {
         <Canvas
           frameloop="demand"
           dpr={[1, 1.5]}
-          camera={{ position: [0, 0.5, 1.65], fov: 35 }}
+          camera={{ position: [0, 0.79, 0.42], fov: 32, near: 0.01, far: 5 }}
+          onCreated={({ camera }) => { camera.lookAt(0, 0.775, 0); camera.updateProjectionMatrix(); }}
           gl={{ alpha: true, antialias: true }}
         >
           <ambientLight intensity={2} />
           <directionalLight position={[2, 3, 4]} intensity={2} />
-          <group position={[0, -0.43, 0]}>
-            <Suspense fallback={null}>
-              <IdleAvatar avatarType={avatarType} />
-            </Suspense>
-          </group>
+          {/* Existing actors are normalized to 0.85 m; crop at head/shoulder height. */}
+          <Suspense fallback={null}><IdleAvatar avatarType={avatarType} /></Suspense>
         </Canvas>
       </PreviewBoundary>
     </span>

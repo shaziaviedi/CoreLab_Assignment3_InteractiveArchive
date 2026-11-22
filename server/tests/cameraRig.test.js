@@ -59,15 +59,16 @@ test("the mounted camera rig completes main, tree, pool and all photography tran
   const f = await fixture(t);
   const views = [
     { mode: "main", cameraZone: null, position: OVERVIEW.pos },
-    { mode: "tree", cameraZone: null, position: treeCameraPosition(0).toArray() },
+    { mode: "tree", treeClose: false, cameraZone: null, position: CAMERA_PRESETS.tree.pos },
+    { mode: "tree", treeClose: true, cameraZone: null, position: treeCameraPosition(0).toArray() },
     ...[0, 1, 2, 3].map((step) => ({ mode: "pool", poolStep: step, cameraZone: null,
       position: poolCameraPosition(f.layout, step).toArray() })),
-    ...Object.entries(CAMERA_PRESETS).map(([zone, view]) => ({ mode: "photo", cameraZone: zone, position: zone === "tree" ? treeCameraPosition(0).toArray() : view.pos })),
+    ...Object.entries(CAMERA_PRESETS).map(([zone, view]) => ({ mode: "photo", cameraZone: zone, position: view.pos })),
   ];
   for (const from of views) for (const to of views) {
-    await f.update({ ...from, poolStep: from.poolStep ?? 0 });
+    await f.update({ ...from, poolStep: from.poolStep ?? 0, treeClose: from.treeClose ?? false });
     await f.frames();
-    await f.update({ ...to, poolStep: to.poolStep ?? 0 });
+    await f.update({ ...to, poolStep: to.poolStep ?? 0, treeClose: to.treeClose ?? false });
     await f.frames();
     assert.ok(f.state.current.camera.position.distanceTo(new THREE.Vector3(...to.position)) < 1e-8,
       `${from.mode} to ${to.mode}:${to.cameraZone ?? to.poolStep ?? ""}`);
@@ -83,7 +84,7 @@ test("the mounted camera rig completes main, tree, pool and all photography tran
 
 test("mounted rig handles mouse and touch orbit, suppresses drag clicks and cleans listeners", async (t) => {
   const f = await fixture(t);
-  await f.update({ mode: "tree" });
+  await f.update({ mode: "tree", treeClose: true });
   await f.frames();
   const before = f.state.current.camera.position.clone();
   f.pointer("pointerdown");
@@ -101,7 +102,7 @@ test("mounted rig handles mouse and touch orbit, suppresses drag clicks and clea
   await f.update({ interactive: false });
   assert.equal(f.listeners.has("pointerdown"), false);
   await f.update({ interactive: true, mode: "photo", cameraZone: "tree" });
-  assert.equal(f.listeners.has("pointerdown"), true);
+  assert.equal(f.listeners.has("pointerdown"), false);
   await f.update({ cameraZone: "north" });
   assert.equal(f.listeners.has("pointerdown"), false);
 });
@@ -150,21 +151,23 @@ test("hotspot feedback consumes clicks and suppresses orbit drags", async (t) =>
 });
 
 
-test("tree photography supports a half-circle orbit and keeps the camera outside the trunk", async (t) => {
+test("wide tree viewing and photography keep the original frame; only messages use close orbit", async (t) => {
   const f = await fixture(t);
-  await f.update({ mode: "photo", cameraZone: "tree" });
-  await f.frames();
-  const before = f.state.current.camera.position.clone();
-  f.pointer("pointerdown");
-  f.pointer("pointermove", { clientX: 724 });
-  f.pointer("pointerup", { clientX: 724 });
-  for (let frame = 0; frame < 220; frame++) {
-    await f.frames(1);
-    const position = f.state.current.camera.position;
-    assert.ok(Math.hypot(position.x + 3, position.z - 9.92) > 2.6);
+  for (const view of [{ mode: "tree", cameraZone: null, treeClose: false }, { mode: "photo", cameraZone: "tree", treeClose: false }]) {
+    await f.update(view);
+    await f.frames();
+    const before = f.state.current.camera.position.clone();
+    assert.ok(before.distanceTo(new THREE.Vector3(...CAMERA_PRESETS.tree.pos)) < 1e-8);
+    f.pointer("pointerdown"); f.pointer("pointermove", { clientX: 724 }); f.pointer("pointerup", { clientX: 724 });
+    await f.frames();
+    assert.ok(before.distanceTo(f.state.current.camera.position) < 1e-8);
   }
-  assert.ok(before.distanceTo(f.state.current.camera.position) > 6);
-  assert.equal(f.gesture.current.ready, true);
+  await f.update({ mode: "tree", cameraZone: null, treeClose: true });
+  await f.frames();
+  assert.ok(f.state.current.camera.position.distanceTo(treeCameraPosition(0)) < 1e-8);
+  await f.update({ treeClose: false });
+  await f.frames();
+  assert.ok(f.state.current.camera.position.distanceTo(new THREE.Vector3(...CAMERA_PRESETS.tree.pos)) < 1e-8);
 });
 
 test("reduced-motion preference completes camera transfers without automatic travel", async (t) => {
@@ -172,7 +175,7 @@ test("reduced-motion preference completes camera transfers without automatic tra
   globalThis.window = { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) };
   try {
     const f = await fixture(t);
-    await f.update({ mode: "tree" });
+    await f.update({ mode: "tree", treeClose: true });
     await f.frames(1);
     assert.ok(f.state.current.camera.position.distanceTo(treeCameraPosition(0)) < 1e-10);
     assert.equal(f.gesture.current.ready, true);

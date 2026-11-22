@@ -3,8 +3,9 @@ import {
   CatmullRomCurve3, TubeGeometry, Vector3, SphereGeometry,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { ROSE_PALETTE } from "./roseAppearance.js";
 
-// One fixed, lightweight white rose. X follows the parapet; Y is its surface normal.
+// One lightweight rose geometry. X follows the parapet; Y is its surface normal.
 // Every rose reuses these geometries/materials, with three mesh draws per rose.
 function petal(angle, radius, height, base) {
   const positions = [], colors = [], indices = [];
@@ -96,11 +97,20 @@ export function createRoseResources() {
     copy.depthWrite = false;
     return [key, copy];
   }));
+  const variants = Object.fromEntries(Object.entries(ROSE_PALETTE).map(([key, appearance]) => {
+    const bloom = materials.bloom.clone();
+    bloom.color.set(appearance.color);
+    const ghost = preview.bloom.clone();
+    ghost.color.set(appearance.color);
+    return [key, { materials: { ...materials, bloom }, preview: { ...preview, bloom: ghost } }];
+  }));
   return {
-    geometries: { bloom, leaves, stem }, materials, preview,
+    geometries: { bloom, leaves, stem }, materials, preview, variants,
     dispose() {
       Object.values(this.geometries).forEach((geometry) => geometry.dispose());
-      [...Object.values(materials), ...Object.values(preview)].forEach((material) => material.dispose());
+      const unique = new Set([...Object.values(materials), ...Object.values(preview),
+        ...Object.values(variants).flatMap((variant) => [...Object.values(variant.materials), ...Object.values(variant.preview)])]);
+      unique.forEach((material) => material.dispose());
     },
   };
 }

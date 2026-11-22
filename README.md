@@ -3,7 +3,7 @@
 ELSEWHERE is an experimental interactive memorial: an immersive React and Three.js
 reconstruction of the 9/11 Memorial, with a sun/moon puzzle, observational pedestrian
 animations, cinematic viewpoints, visitor photography, Survivor Tree paper messages,
-and shared white roses around the North Pool. Collaboration stays quiet and requires
+and shared colored roses around the North Pool. Collaboration stays quiet and requires
 no account. Camera movement, puzzle progress, atmosphere and photographs remain local.
 
 Technical stack: React 18, Three.js, React Three Fiber, postprocessing and Vite;
@@ -17,23 +17,24 @@ local Node must be at least 22.9. The dependency lockfile is committed.
 ```sh
 npm ci
 cp .env.example .env
-npm run server:dev
-```
-
-In a second terminal:
-
-```sh
 npm run dev
 ```
 
-Open `http://localhost:5173/`. The backend defaults to `http://localhost:3001`;
-`GET /health` returns `{ "status": "ok", "service": "elsewhere-memorial" }`.
-`npm run server` loads `.env` without watch mode. `npm start` is the production
-entry point and reads environment variables supplied by the hosting service.
+One command starts the existing Express/Socket.io backend on port 3001 and Vite on
+port 5173. Open `http://localhost:5173/?room=memorial`. The launcher waits for a healthy,
+compatible backend and reuses an already-running compatible server. It never kills
+an unrelated process. If an old backend occupies 3001, stop its terminal process
+and rerun the command. `PORT` and the local `VITE_SOCKET_URL` port must match.
 
-For scene-only work, `npm run dev:offline` disables Socket.io and its reconnect loop.
-The original environment and local interactions remain available. Vite uses a strict
-port; if you deliberately change it, update the backend's allowed origins as well.
+`GET http://localhost:3001/health` returns `status`, `service`, and `layoutVersion`.
+Development watching checks actual source contents under `server`/`shared`, so
+file-provider hydration or dependency reads do not repeatedly restart the backend.
+Actual server edits still restart it and clear its in-memory contributions.
+
+For separate terminals, run `npm run server:dev` and `npm run dev:client`.
+`npm run server` loads `.env` without watching. `npm start` is the production entry
+point and reads the host's environment. `npm run dev:offline` preserves scene-only
+work without a socket or reconnect loop. If changing Vite's port, update CORS origins.
 
 ## Environment variables
 
@@ -44,7 +45,7 @@ Backend variables:
 - `CORS_ORIGINS`: comma-separated exact frontend origins. Local defaults are
   `http://localhost:5173,http://127.0.0.1:5173`. Pages production uses
   `https://shaziaviedi.github.io`, without a repository path or trailing slash.
-  The supplied Blueprint also allows the existing Vercel frontend origin.
+  Set the production origins explicitly when Render prompts for `CORS_ORIGINS`.
 - `CONTRIBUTION_LIMIT`: note/flower attempts per socket/window; default `6`.
 - `CONTRIBUTION_WINDOW_MS`: contribution rate window; default `60000`.
 - `NODE_ENV`: `production` on Render.
@@ -64,10 +65,12 @@ ignored by Git. Restart local servers after environment edits.
 
 ## Rooms, identity and presence
 
-Visitors choose a username (maximum 24 Unicode code points) and an existing male
-or female character model. Their name, avatar and stable anonymous visitor ID are
-saved in localStorage; blocked storage falls back to the current session. The small
-profile control allows later edits without recreating the memorial or its camera.
+After loading, visitors see the original landing/intro animation, then first-time
+profile setup before any interactive controls are enabled. Visitors choose a username
+(maximum 24 Unicode code points) and a circular head/shoulder portrait rendered from
+the existing male or female character model. Their name, avatar and stable anonymous visitor ID are
+saved in localStorage; blocked storage falls back to the current session. The portrait beside Reset allows later edits without recreating the memorial.
+No username is permanently displayed beside it; connection status/count sit below it.
 
 `?room=your-room` joins that room without login. No query joins `memorial`. Room IDs
 allow 1–64 ASCII letters, numbers, underscores or hyphens and are case-sensitive.
@@ -76,8 +79,8 @@ or access controls. Copy room link preserves the repository path and room ID,
 without copying diagnostic parameters or identity. A read-only URL fallback is
 provided when clipboard access fails.
 
-The connection control displays connected/reconnecting/disconnected state, the
-session count and an accessible visitor list. Other visitors use the existing avatar
+The compact connection control displays connected/reconnecting/disconnected state,
+the session count and an expandable accessible visitor list. Other visitors use the existing avatar
 models, small projected usernames, zones and temporary activity cues. Standing
 locations represent zones, not exact camera positions. Bodies fade near the camera,
 never capture raycasts and relocate between safe points without walking through
@@ -93,18 +96,28 @@ Historical contributions are not announced when joining/reconnecting.
 
 ## Survivor Tree messages
 
-Place the Tree fragment and enter its hotspot or camera icon. The photography
-frame also contains **Leave a message**. Drag around the trunk through a full circle;
-scroll/pinch changes the close orbit distance. Collision checks protect trunks and
-nearby geometry. The back control restores the memorial view.
+Place the Tree fragment and choose **Leave a message** on the map. This directly
+opens the close-up orbit and composer. Cancel writing to stay near the tree;
+hover the fence for the glowing magnifier and **View Messages**, or use its
+keyboard-accessible equivalent. Browsing, reading and placement share the same
+lower orbit and retain its angle. The photography camera icon keeps its original
+wide composition and separate shutter/archive controls.
 
-Write up to 180 Unicode code points, review the warm paper-tag preview and continue
-to placement. Hover a free attachment point to preview the tag; click to attach.
-Keyboard users can Tab to projected attachment points and press Enter/Space.
-Twenty-four stable anchors belong to the surrounding installation, never the bark.
-A pending request blocks duplicates. Rejections preserve the draft; uncertain replies
-allow an idempotent retry at the last position. Accepted tags gently settle and
-appear for everyone in the same room.
+Write up to 180 Unicode code points, preview the paper tag, then move over the
+fence to choose an attachment position. A single cylindrical raycast surface snaps
+to 96 angular columns and 26 height rows (2 cm vertical steps). Smaller tags use
+scale 0.38. Their top attachments range from 0.32 to 0.82 scene units. Keyboard
+users can Tab through 96 coarser positions, plus every existing note. Notes attach
+to the surrounding installation, never the bark. Overlapping positions show a red
+tint and cannot overwrite existing notes. Server-side collision checks include
+neighbors and wraparound at the cylinder seam. Legacy tree-01–tree-24 records
+still resolve to their original attachment heights/angles.
+
+The reduced fence is centered on the visible lower bark rather than asymmetric
+canopy bounds. Shared layout version is 3; deploy frontend and backend together.
+Observation actors retain shoulder clearance. **← RETURN TO MAP** uses the existing
+photography return styling. A pending request blocks duplicates; rejected or
+uncertain submissions preserve the draft and original retry identity.
 
 Click/focus an existing tag to read its full text, author, chosen avatar and local
 date/time. Text is rendered literally, never as HTML. The reader offers reversible
@@ -114,17 +127,21 @@ moderator report or removal for other visitors.
 
 ## North Pool flowers
 
-Place the Pool fragment and enter its hotspot, or choose **Leave a flower** from
-its photography frame. Previous/next arrows move smoothly between four sides,
-including wraparound. Hover a free parapet point for a translucent white rose
+Place the Pool fragment and enter its 3D hotspot. Arrows follow the inward-facing
+camera’s screen-right/left direction on all four sides, including wraps; side labels
+follow the same camera ordering. **RETURN TO MAP** exits. Photography remains a
+separate camera-icon action with no placement control. Choose a rose color using
+five compact swatches, then hover a free parapet point for a translucent colored
 preview and click once to request placement. Touch users can tap a free point;
 keyboard users can Tab to a visible point and press Enter/Space.
 
-All visitors use one procedural white-rose model. There is no flower menu,
-dedication, recipient, message field, confirmation modal or customization. The
-48 stable anchors (12 per side) are raycast onto the actual parapet geometry,
-with surface-aligned orientation on its outer lip, clear of the basin and names
-panel. Flowers remain in world space through camera and sun/moon changes.
+All visitors share one lightweight rose geometry. Material colors are white
+(default), pale pink, red, peach and lavender. There are no dedication, recipient,
+message fields or confirmation forms. Legacy flowers without roseColor render
+white. The 48 stable anchors (12 per side) are raycast onto the actual parapet
+geometry. A stable ID/anchor hash adds slight horizontal rotation and tiny local
+offsets, preserving stone contact and the reserved outer lip. Every client sees
+the same transform across camera, lighting, reload and reconnect changes.
 
 Hovering a placed rose shows only contributor username and placement date/time.
 The same metadata appears on keyboard focus and touch tap. The small translucent
@@ -139,8 +156,8 @@ Shared authoritative state:
 
 - Visitors: socket ID, stable visitor ID, username, avatar, zone, join timestamp,
   and expiring activity.
-- Notes: ID, room ID, author ID/name/avatar, text, anchor ID, server timestamp.
-- Flowers: ID, room ID, author ID/name/avatar, pool side, anchor ID, server timestamp.
+- Notes: ID, room ID, author ID/name/avatar, text, anchor ID, fence-relative column/row, server timestamp.
+- Flowers: ID, room ID, author ID/name/avatar, rose color, pool side, anchor ID, server timestamp.
   No dedication, recipient, message or flower-type fields are accepted.
 
 Local React state:
@@ -150,7 +167,7 @@ Local React state:
 - `Experience`: puzzle fragments, sun/moon, observation playback, selected camera,
   pool side, photo archive and local interface state.
 - `MemorialCameraRig`: orbit/pan/zoom and in-progress camera movement stay in refs.
-- Tree composer/flower hooks: draft, preview, pending request, selected metadata
+- Tree composer/flower hooks: draft, selected rose color, preview, pending request, selected metadata
   and errors. Hidden-note preferences are localStorage data scoped by room.
 
 Remote contributions never reset the camera, puzzle or observation playback.
@@ -172,17 +189,21 @@ Requests use acknowledgements: `{ ok: true, ... }` or
   activity requires north. Profile edits keep socket identity and join time.
 - `presence:leave`: explicit leave, room switch or disconnect; broadcasts
   `{ roomId, socketId, visitorId }`. A socket belongs to one room.
-- `note:create`: `{ requestId, text, anchorId }`; anchors `tree-01`–`tree-24`.
-- `flower:create`: `{ requestId, roomId?, poolSide, anchorId }`; sides
+- `note:create`: `{ requestId, text, fencePosition: { column, row }, anchorId? }`;
+  columns 0–95 and rows 0–25. Canonical IDs are `fence-column-row`; legacy
+  `tree-01`–`tree-24` requests are still accepted and normalized.
+- `flower:create`: `{ requestId, roomId?, poolSide, anchorId, roseColor? }`; colors
+  white/palePink/red/peach/lavender (omitted defaults white); sides
   north/east/south/west, anchors such as `north-pool-east-01`–`north-pool-east-12`.
 - `note:created` / `flower:created`: `{ roomId, revision, note/flower }` broadcasts
   to every room member, including the sender. Clients upsert by server ID.
 - `placement:error`: requester-only failure with event, request ID and error.
 
 The server generates contribution UUIDs and ISO 8601 timestamps and uses its joined
-visitor profile for author information. Coordinates, unknown anchors/sides/avatars,
+visitor profile for author information. Raw world coordinates, out-of-bounds
+fence coordinates, unknown anchors/sides/avatars/colors,
 author overrides, control characters and unexpected fields are rejected. Placement
-checks and inserts are atomic in the in-memory repository: first valid request wins;
+bounds/collision checks and inserts are atomic in the in-memory repository: first valid request wins;
 a competing request receives `ANCHOR_OCCUPIED` and can choose another anchor.
 
 Retry the same successful request ID and payload to receive its original record
@@ -238,11 +259,21 @@ References: [Render Express deployment](https://render.com/docs/deploy-node-expr
 
 For a root-domain deployment such as the existing Vercel frontend, keep
 `VITE_BASE_PATH=/`, set its production `VITE_SOCKET_URL` and `VITE_ENABLE_COLLAB=true`,
-add that frontend origin to Render CORS, then redeploy. A Vercel frontend does not
+add that frontend origin to Render CORS, then redeploy. `vercel.json` uses
+`npm run build:vercel`; that command validates the public HTTPS backend, checks
+its health, and builds with root base `/`. Optional `FRONTEND_URL` also checks CORS.
+A missing/localhost socket URL stops the Vercel build. Apply the variables to
+Production and any Preview environment you use, then redeploy to compile them in. A Vercel frontend does not
 replace the assignment's required Pages publication or long-lived Render server.
 See [Vite's Pages guide](https://vite.dev/guide/static-deploy#github-pages).
 
 ## Verification and deployment status
+
+See [the collaborative interaction refinements](docs/interaction-refinements.md)
+for the latest placement, camera, color and verification changes. The
+[connectivity revisions](docs/connectivity-ui-revisions.md) record the preceding
+connection diagnosis and startup/deployment instructions.
+The earlier integration report records the state before these revisions.
 
 At this review, the existing Vercel frontend was reachable but had no backend URL
 compiled into it. GitHub Pages was not enabled, and Render required sign-in.

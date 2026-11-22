@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { NORTH_POOL, POOL_SCALE } from "../../../src/scene/memorialLayout.js";
 
 // Decode only mesh positions and indices; the real GLB supplies all test geometry.
-export function loadPoolGeometry() {
-  const bytes = readFileSync(new URL("../../../public/models/reference-pool.glb", import.meta.url));
+export function loadGeometry(relativePath) {
+  const bytes = readFileSync(new URL(relativePath, import.meta.url));
   const jsonLength = bytes.readUInt32LE(12);
   const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
   const binaryStart = 20 + jsonLength + 8;
@@ -37,7 +37,9 @@ export function loadPoolGeometry() {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", attribute(primitive.attributes.POSITION));
         if (primitive.indices !== undefined) geometry.setIndex(attribute(primitive.indices));
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+        const material = new THREE.MeshBasicMaterial();
+        material.name = gltf.materials?.[primitive.material]?.name ?? "";
+        const mesh = new THREE.Mesh(geometry, material);
         mesh.name = source.name;
         group.add(mesh);
       }
@@ -46,9 +48,14 @@ export function loadPoolGeometry() {
     return group;
   }
   const root = new THREE.Group();
-  root.position.fromArray(NORTH_POOL);
-  root.scale.setScalar(POOL_SCALE);
   gltf.scenes[gltf.scene ?? 0].nodes.forEach((index) => root.add(node(index)));
   return root;
 }
 
+
+export function loadPoolGeometry() {
+  const root = loadGeometry("../../../public/models/reference-pool.glb");
+  root.position.fromArray(NORTH_POOL);
+  root.scale.setScalar(POOL_SCALE);
+  return root;
+}

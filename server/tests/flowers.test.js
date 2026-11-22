@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { createMemorialServer } from "../app.js";
 import { readConfig } from "../config.js";
 import { loadPoolGeometry } from "./helpers/poolGeometry.js";
-import { measurePoolLayout, poolCameraPosition, poolCameraTarget } from "../../src/scene/navigation.js";
+import { POOL_VIEW_SIDES, measurePoolLayout, poolCameraPosition, poolCameraTarget } from "../../src/scene/navigation.js";
 import { POOL_SIDES } from "../../shared/protocol.js";
 import useMemorialSocket from "../../src/collaboration/useMemorialSocket.js";
 import usePoolFlowers from "../../src/collaboration/flowers/usePoolFlowers.js";
@@ -66,7 +66,7 @@ test("flower hooks synchronize sides 1/3, resolve races and reconcile late joins
   assert.equal(received.authorAvatar, "male");
   assert.equal(received.createdAt, new Date(received.createdAt).toISOString());
   assert.equal(received.roomId, "flowers-review");
-  assert.deepEqual(Object.keys(received).sort(), ["id", "roomId", "authorId", "authorName", "authorAvatar", "poolSide", "anchorId", "createdAt"].sort());
+  assert.deepEqual(Object.keys(received).sort(), ["id", "roomId", "authorId", "authorName", "authorAvatar", "roseColor", "poolSide", "anchorId", "createdAt"].sort());
   await act(async () => { assert.equal((await states[1].createFlower(payload("south"))).ok, true); });
   await eventually(() => states[0].flowers.length === 2);
   let race;
@@ -132,7 +132,7 @@ test("projected contributor labels follow each side and keep exact server timest
     camera.position.copy(poolCameraPosition(layout, side));
     camera.lookAt(poolCameraTarget(layout, side));
     camera.updateMatrixWorld();
-    const anchor = layout.anchors[side * 12 + 6];
+    const anchor = layout.anchors.filter((anchor) => anchor.poolSide === POOL_VIEW_SIDES[side])[6];
     const point = projectFlower(anchor, camera, 1280, 800);
     assert.ok(point && point.x > 0 && point.x < 1280 && point.y > 0 && point.y < 800);
   }
@@ -164,7 +164,7 @@ test("direct placement blocks double-clicks, removes failed previews and safely 
   await act(async () => { finish({ ok: true }); await completion; });
   assert.equal(state.pending, false);
   assert.equal(state.error, "");
-  assert.deepEqual(Object.keys(requests[2]).sort(), ["requestId", "poolSide", "anchorId"].sort());
+  assert.deepEqual(Object.keys(requests[2]).sort(), ["requestId", "poolSide", "anchorId", "roseColor"].sort());
   await renderer.unmount();
 });
 

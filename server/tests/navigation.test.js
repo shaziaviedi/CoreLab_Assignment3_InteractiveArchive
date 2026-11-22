@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { loadPoolGeometry } from "./helpers/poolGeometry.js";
 import test from "node:test";
 import * as THREE from "three";
-import { measurePoolLayout, poolCameraPosition, poolCameraTarget, treeCameraPosition, clearTreeOrbit, sideIndex, transitionPosition, safeCameraPosition } from "../../src/scene/navigation.js";
+import { POOL_VIEW_SIDES, measurePoolLayout, poolCameraPosition, poolCameraTarget, treeCameraPosition, clearTreeOrbit, sideIndex, transitionPosition, safeCameraPosition } from "../../src/scene/navigation.js";
 import { NORTH_POOL, POOL_SCALE, SURVIVOR_TREE, CAMERA_PRESETS, OVERVIEW } from "../../src/scene/memorialLayout.js";
 import { canActivate } from "../../src/scene/useInteractionMode.js";
 
@@ -42,7 +42,7 @@ test("tree orbit covers every angle close to the trunk and transfers preserve ev
     assert.ok(treeCameraPosition(angle).distanceTo(treeCameraPosition(angle + Math.PI * 2)) < 1e-10);
     const position = treeCameraPosition(angle);
     assert.ok(Math.abs(Math.hypot(position.x - SURVIVOR_TREE[0], position.z - SURVIVOR_TREE[2]) - 3.2) < 1e-10);
-    assert.equal(position.y, 1.7);
+    assert.equal(position.y, 1.05);
   }
   const views = [OVERVIEW.pos, ...Object.values(CAMERA_PRESETS).map((view) => view.pos),
     treeCameraPosition(0).toArray(), ...[0, 1, 2, 3].map((side) => poolCameraPosition(layout, side).toArray())];
@@ -65,7 +65,7 @@ test("each pool view frames its central parapet preview anchors", () => {
     const frustum = new THREE.Frustum().setFromProjectionMatrix(
       new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
     );
-    const central = layout.anchors.slice(side * 12 + 4, side * 12 + 8);
+    const central = layout.anchors.filter((anchor) => anchor.poolSide === POOL_VIEW_SIDES[side]).slice(4, 8);
     for (const anchor of central)
       assert.ok(frustum.containsPoint(new THREE.Vector3(...anchor.position)), anchor.id);
   }
@@ -88,9 +88,22 @@ test("tree orbit avoids nearby trunks without rising into the canopy", () => {
   const blocker = new THREE.Box3(new THREE.Vector3(-3.35, 0, 12.6), new THREE.Vector3(-2.65, 2.6, 13.3));
   const position = treeCameraPosition(0.5);
   const cleared = clearTreeOrbit(position, [blocker]);
-  assert.equal(cleared.y, 1.7);
+  assert.equal(cleared.y, 1.05);
   assert.ok(cleared.z < blocker.min.z - 0.2);
   assert.equal(blocker.containsPoint(cleared), false);
   for (let angle = 0; angle < Math.PI * 2; angle += 0.05)
     assert.ok(treeCameraPosition(angle, new THREE.Vector3(), 100).x < 0.83, "Zoom must remain outside the South Pool's west edge");
+});
+
+test("pool arrows follow the viewer's screen-right/left tangent on every side and wrap", () => {
+  for (let step = -4; step <= 8; step++) {
+    const position = poolCameraPosition(layout, step);
+    const forward = poolCameraTarget(layout, step).sub(position).normalize();
+    const right = forward.cross(new THREE.Vector3(0, 1, 0)).normalize();
+    assert.ok(poolCameraPosition(layout, step + 0.01).sub(position).dot(right) > 0);
+    assert.ok(poolCameraPosition(layout, step - 0.01).sub(position).dot(right) < 0);
+    const side = POOL_VIEW_SIDES[sideIndex(step)];
+    const relative = position.clone().sub(layout.center);
+    assert.ok(side === "north" ? relative.z < 0 : side === "south" ? relative.z > 0 : side === "west" ? relative.x < 0 : relative.x > 0);
+  }
 });

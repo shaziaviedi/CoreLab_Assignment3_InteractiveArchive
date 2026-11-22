@@ -4,12 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "dev:client": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
     "server": "node --env-file-if-exists=.env server/index.js",
-    "server:dev": "node --env-file-if-exists=.env --watch server/index.js",
+    "server:dev": "node --env-file-if-exists=.env scripts/watch-server.mjs",
+    "build:vercel": "node scripts/deployment/build-vercel.mjs",
     "test": "node --import tsx --test server/tests/*.test.js",
     "dev:offline": "vite --mode offline",
     "assets:optimize": "node scripts/optimize-assets.mjs",
@@ -40,6 +42,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "sharp": "^0.35.5",
     "tsx": "^4.23.15",
-    "vite": "^6.4.4"
+    "vite": "^6.4.4",
+    "react-test-renderer": "18.3.1"
   }
 }

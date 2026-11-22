@@ -75,7 +75,7 @@
 }
 .visitor-card .avatar-option {
   min-width: 0;
-  padding: 0 8px 10px;
+  padding: 10px 8px;
   font-size: 14px;
 }
 .avatar-option[aria-pressed="true"] {
@@ -84,8 +84,13 @@
 }
 .avatar-preview {
   display: block;
-  width: 100%;
-  height: 145px;
+  width: 112px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #d7c8df33, #b6cfd033);
   overflow: hidden;
   pointer-events: none;
 }
@@ -103,25 +108,27 @@
   outline-offset: 4px;
 }
 .collaboration-status {
-  position: fixed;
-  right: 3.6%;
-  top: calc(5% + 54px);
+  position: relative;
   z-index: 60;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: 92vw;
+  width: 36px;
+  height: 36px;
   color: #fff7fa;
-  font-size: 12px;
+  font-size: 11px;
 }
 .collaboration-status details {
-  border: 1px solid rgba(235, 230, 247, 0.4);
-  border-radius: 12px;
-  background: rgba(38, 39, 67, 0.8);
-  backdrop-filter: blur(12px);
+  position: absolute;
+  right: 0;
+  top: 58px;
+  width: min(248px, calc(100vw - 48px));
+  white-space: nowrap;
 }
 .collaboration-status summary {
-  padding: 10px 12px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #262743b8;
+  backdrop-filter: blur(12px);
   list-style: none;
   cursor: pointer;
 }
@@ -139,15 +146,30 @@
 .connection-dot.connected { background: #bad3bf; }
 .connection-dot.reconnecting { background: #ffe5b3; }
 .visitor-edit {
-  max-width: 140px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   background: rgba(38, 39, 67, 0.8);
+  border-radius: 50%;
+  border: 1px solid #bdbbcd;
+  box-shadow: 0 0 10px #fff0c619;
 }
+.visitor-edit .avatar-preview { width: 100%; height: 100%; margin: 0; }
+.memorial-actions { z-index: 60; }
+.visitor-edit:focus-visible { outline: 2px solid #fff0c6; outline-offset: 4px; }
 .presence-panel {
-  width: min(270px, 64vw);
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(100dvh - 165px);
+  overflow-y: auto;
   padding: 0 12px 12px;
+  margin-top: 6px;
+  border: 1px solid #ebe6f766;
+  border-radius: 12px;
+  background: #262743ed;
+  backdrop-filter: blur(12px);
+  white-space: normal;
 }
 .presence-panel p { overflow-wrap: anywhere; }
 .visitor-list {
@@ -169,11 +191,8 @@
 .visitor-list small { grid-column: 2; font-size: 12px; }
 .visitor-avatar-mark { grid-row: span 2; align-self: center; }
 @media (max-width: 760px) {
-  .collaboration-status {
-    top: calc(3% + 54px);
-    right: 4%;
-    font-size: 12px;
-  }
-  .visitor-edit { max-width: 88px; }
   .visitor-card { padding: 22px; }
 }
+@keyframes presence-expand { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.presence-panel { animation: presence-expand 160ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .presence-panel { animation: none; } }

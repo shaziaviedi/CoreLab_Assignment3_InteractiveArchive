@@ -4,6 +4,7 @@ import { canActivate } from "../../scene/useInteractionMode.js";
 import { createRoseResources } from "./roseGeometry.js";
 import { projectFlower } from "./flowerProjection.js";
 import WhiteRose from "./WhiteRose.jsx";
+import { roseRestingTransform } from "./roseAppearance.js";
 
 export default function PoolFlowers3D({ layout, side, flowers, controls, enabled, infoEnabled,
   gesture, targets, tooltip, Rose = WhiteRose }) {
@@ -11,7 +12,8 @@ export default function PoolFlowers3D({ layout, side, flowers, controls, enabled
   const resources = useMemo(createRoseResources, []);
   const pointerType = useRef("mouse");
   const occupied = useMemo(() => new Map(flowers.map((flower) => [flower.anchorId, flower])), [flowers]);
-  const anchors = useMemo(() => new Map(layout?.anchors.map((anchor) => [anchor.id, anchor]) ?? []), [layout]);
+  const anchors = useMemo(() => new Map(layout?.anchors.map((anchor) => [anchor.id,
+    occupied.has(anchor.id) ? roseRestingTransform(anchor, occupied.get(anchor.id)) : anchor]) ?? []), [layout, occupied]);
   useEffect(() => () => resources.dispose(), [resources]);
   useEffect(() => {
     controls.clearPreview();
@@ -55,7 +57,7 @@ export default function PoolFlowers3D({ layout, side, flowers, controls, enabled
   }
   return (
     <group name="shared-north-pool-flowers">
-      {layout.anchors.map((anchor) => {
+      {[...anchors.values()].map((anchor) => {
         const flower = occupied.get(anchor.id);
         const available = !flower && enabled && anchor.poolSide === side && !controls.pending;
         if (!flower && !available) return null;
@@ -83,8 +85,8 @@ export default function PoolFlowers3D({ layout, side, flowers, controls, enabled
               <planeGeometry args={[0.44, 0.12]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
             </mesh>
-            {flower && <Rose resources={resources} />}
-            {preview && <Rose resources={resources} preview />}
+            {flower && <Rose resources={resources} roseColor={flower.roseColor ?? "white"} />}
+            {preview && <Rose resources={resources} preview roseColor={controls.roseColor ?? "white"} />}
             {available && (
               <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
                 <ringGeometry args={[0.045, preview ? 0.075 : 0.058, 24]} />

@@ -2,10 +2,11 @@ import React, { useRef } from "react";
 import useReducedMotion from "../../scene/useReducedMotion.js";
 import { useFrame } from "@react-three/fiber";
 
-export default function WhiteRose({ resources, preview = false }) {
+export default function WhiteRose({ resources, preview = false, roseColor = "white" }) {
   const rose = useRef();
   const progress = useRef(0);
   const reduced = useReducedMotion();
+  const appearance = resources.variants[roseColor] ?? resources.variants.white;
   useFrame((_, dt) => {
     if (!rose.current) return;
     if (preview || reduced) {
@@ -23,7 +24,7 @@ export default function WhiteRose({ resources, preview = false }) {
   return (
     <group ref={rose} dispose={null}>
       {Object.entries(resources.geometries).map(([name, geometry]) => (
-        <mesh key={name} geometry={geometry} material={(preview ? resources.preview : resources.materials)[name]}
+        <mesh key={name} geometry={geometry} material={(preview ? appearance.preview : appearance.materials)[name]}
           castShadow={!preview} receiveShadow />
       ))}
     </group>

@@ -8,7 +8,7 @@ import useHiddenNotes, { hiddenNotesKey, readHiddenNotes } from "../../src/colla
 import TreeNotes3D from "../../src/collaboration/tree/TreeNotes3D.jsx";
 import TreeNotePanel from "../../src/collaboration/tree/TreeNotePanel.jsx";
 import TreeNoteAccessibility from "../../src/collaboration/tree/TreeNoteAccessibility.jsx";
-import { TREE_NOTE_ANCHORS } from "../../src/collaboration/tree/treeNoteLayout.js";
+import { KEYBOARD_NOTE_ANCHORS } from "../../src/collaboration/tree/treeNoteLayout.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,7 +46,7 @@ test("note hiding is local, room-scoped, reversible and tolerant of blocked stor
 test("hidden tags still occupy their anchors and keyboard focus previews only visible points", async () => {
   const note = { id: "hidden-note", anchorId: "tree-01", text: "Content a visitor chose to hide.", authorName: "Author" };
   const hiddenNoteIds = new Set([note.id]);
-  const front = TREE_NOTE_ANCHORS[1], rear = TREE_NOTE_ANCHORS[7];
+  const front = KEYBOARD_NOTE_ANCHORS[65], rear = KEYBOARD_NOTE_ANCHORS[80];
   const elements = new Map([front, rear].map((anchor) => [anchor.id, { hidden: true, style: {}, tabIndex: -1 }]));
   const controls = { stage: "place", status: "connected", focusedAnchorId: front.id, draft: "Remembered.", pending: false, uncertain: false, place: () => {}, read: () => {}, focusAnchor: () => {} };
   const gesture = { current: { ready: true, pointers: 0, dragged: false, fragmentDragging: false } };
@@ -54,13 +54,13 @@ test("hidden tags still occupy their anchors and keyboard focus previews only vi
   function Aim() { const camera = useThree((state) => state.camera); camera.lookAt(-3, 1.05, 9.92); camera.updateMatrixWorld(); return null; }
   const renderer = await create(React.createElement(React.Fragment, null, React.createElement(Aim),
     React.createElement(TreeNotes3D, { notes: [note], controls, hiddenNoteIds, targets: { current: elements }, enabled: true, gesture, Tag })), {
-    camera: { position: [-3, 1.7, 13.12], fov: 46 }, beforeReturn: (canvas) => { canvas.dataset = {}; },
+    camera: { position: [-3, 1.7, 13.12], fov: 46 }, beforeReturn: (canvas) => { canvas.dataset = {}; canvas.style.setProperty = () => {}; },
   });
   await renderer.advanceFrames(1, 1 / 60);
   assert.equal(elements.get(front.id).hidden, false);
   assert.equal(elements.get(rear.id).hidden, true);
   const targets = renderer.scene.findAll((node) => typeof node.props.onClick === "function");
-  assert.equal(targets.length, 24, "23 free anchors plus one hidden-but-occupied message");
+  assert.equal(targets.length, 2, "one continuous fence surface plus one hidden-but-occupied message");
   assert.equal(renderer.scene.findAll((node) => node.props.text === note.text).length, 0);
   assert.equal(renderer.scene.findAll((node) => node.props.name === "tag-preview").length, 1);
   await renderer.unmount();

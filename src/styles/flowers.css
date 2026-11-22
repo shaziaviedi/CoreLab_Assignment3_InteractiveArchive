@@ -39,3 +39,10 @@
 .pool-photo-entry { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); pointer-events: auto; border: 1px solid #fff7ed66; border-radius: 24px; padding: 10px 17px; background: #343653b8; color: #fff7ed; cursor: pointer; }
 @keyframes flower-label-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .flower-tooltip-content { animation: none; } }
+/* Material swatches share one rose geometry and never open a placement form. */
+.rose-colors { position: absolute; top: max(156px, 23vh); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; padding: 10px 15px; margin: 0; border: 1px solid #fff7ed44; border-radius: 25px; background: #343653b8; backdrop-filter: blur(12px); pointer-events: auto; }
+.rose-colors legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.rose-colors button { width: 24px; height: 24px; border: 1px solid #ffffff77; border-radius: 50%; padding: 0; background: var(--rose-color); cursor: pointer; box-shadow: inset 0 0 6px #ffffff33; }
+.rose-colors button[aria-pressed="true"] { outline: 1px solid #fff7ed; outline-offset: 4px; }
+.rose-colors button:focus-visible { outline: 2px solid #fff7ed; outline-offset: 4px; }
+.rose-colors:disabled { opacity: 0.6; }

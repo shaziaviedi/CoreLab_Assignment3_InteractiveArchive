@@ -6,6 +6,7 @@ import { ContributionRepository } from "./storage/contributionRepository.js";
 import { RoomService } from "./services/roomService.js";
 import { PlacementService } from "./services/placementService.js";
 import { registerHandlers } from "./sockets/registerHandlers.js";
+import { LAYOUT_VERSION } from "../shared/memorialLayout.js";
 
 export function createMemorialServer(config = readConfig()) {
   const app = express();
@@ -22,7 +23,7 @@ export function createMemorialServer(config = readConfig()) {
   });
   app.get("/health", (_request, response) => {
     response.set("Cache-Control", "no-store");
-    response.json({ status: "ok", service: "elsewhere-memorial" });
+    response.json({ status: "ok", service: "elsewhere-memorial", layoutVersion: LAYOUT_VERSION });
   });
 
   const httpServer = createServer(app);

@@ -10,7 +10,7 @@ import { VisitorZone } from "./collaboration/components/VisitorPresence.jsx";
 import useInteractionMode from "./scene/useInteractionMode.js";
 import MemorialNavigation from "./scene/MemorialNavigation.jsx";
 import { prepareSceneAssets } from "./scene/assets.js";
-import LoadingScreen from "./scene/LoadingScreen.jsx";
+import CollaborationStatus from "./collaboration/components/CollaborationStatus.jsx";
 import ScenePerformance from "./scene/ScenePerformance.jsx";
 import { useCollaboration } from "./collaboration/CollaborationProvider.jsx";
 import useTreeNotes from "./collaboration/tree/useTreeNotes.js";
@@ -25,13 +25,11 @@ import TreeNotePanel, { TreeNoteEntry } from "./collaboration/tree/TreeNotePanel
 import usePoolFlowers from "./collaboration/flowers/usePoolFlowers.js";
 import PoolFlowers3D from "./collaboration/flowers/PoolFlowers3D.jsx";
 import FlowerOverlay from "./collaboration/flowers/FlowerOverlay.jsx";
-import { POOL_SIDES } from "../shared/protocol.js";
-import { sideIndex } from "./scene/navigation.js";
+import { POOL_VIEW_SIDES, sideIndex } from "./scene/navigation.js";
 
-export default React.memo(function Experience({ preview = false, interactionBlocked = false, onSceneReady }) {
+export default React.memo(function Experience({ preview = false, interactionBlocked = false, onSceneReady, onLoadError, onEditProfile }) {
   const [assetsReady, setAssetsReady] = useState(false);
   const [gpuReady, setGpuReady] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
   const [metrics, setMetrics] = useState(null);
   const profiling = new URLSearchParams(window.location.search).has("profile");
   useEffect(() => {
@@ -39,10 +37,10 @@ export default React.memo(function Experience({ preview = false, interactionBloc
     prepareSceneAssets().then(() => {
       if (active) setAssetsReady(true);
     }).catch(() => {
-      if (active) setLoadFailed(true);
+      if (active) onLoadError?.(true);
     });
     return () => { active = false; };
-  }, []);
+  }, [onLoadError]);
   const markSceneReady = useCallback(() => {
     setGpuReady(true);
     onSceneReady?.(true);
@@ -58,7 +56,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
   const [paused, setPaused] = useState(false);
   const [cameraZone, setCameraZone] = useState(null);
   const [interactionZone, setInteractionZone] = useState(null);
-  const [photoOrigin, setPhotoOrigin] = useState(null);
   const [poolStep, setPoolStep] = useState(0);
   const [poolLayout, setPoolLayout] = useState(null);
   const [transitioning, setTransitioning] = useState(true);
@@ -92,9 +89,11 @@ export default React.memo(function Experience({ preview = false, interactionBloc
     interactionZone === "north" ? "pool" : "main";
   const sceneInteractive = gpuReady && !preview && !interactionBlocked && !archiveOpen;
   const { notes, createNote, flowers, createFlower, status, visitors, identity, roomId, announcement } = useCollaboration();
-  const treeActive = sceneInteractive && (interactionZone === "tree" || cameraZone === "tree");
-  const treeNotes = useTreeNotes({ active: treeActive, notes, createNote, status });
-  const poolSide = POOL_SIDES[sideIndex(poolStep)];
+  const treeActive = sceneInteractive && interactionZone === "tree" && !cameraZone;
+  const treeNotes = useTreeNotes({ active: treeActive, notes, createNote, status, autoCompose: true });
+  // Writing, browsing and cancelling share one orbit; contributions never reset it.
+  const treeClose = interactionZone === "tree" && !cameraZone;
+  const poolSide = POOL_VIEW_SIDES[sideIndex(poolStep)];
   const flowerActive = sceneInteractive && mode === "pool" && !transitioning;
   const flowerControls = usePoolFlowers({ active: flowerActive, side: poolSide, flowers, createFlower, status });
   const flowerTargets = useRef(new Map());
@@ -116,7 +115,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
   const enterInteraction = useCallback((zone) => {
     setInteractionZone(zone);
     setCameraZone(null);
-    setPhotoOrigin(null);
     setSelected(null);
     setDockOpen(false);
     setHoveredZone(null);
@@ -124,8 +122,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
   }, []);
   function leavePhoto() {
     setCameraZone(null);
-    setInteractionZone(photoOrigin);
-    setPhotoOrigin(null);
+    setInteractionZone(null);
   }
   useEffect(
     () => () => {
@@ -250,7 +247,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [interactionBlocked, archiveOpen, cameraZone, photoOrigin, treeActive, treeNotes.stage, treeNotes.cancel]);
+  }, [interactionBlocked, archiveOpen, cameraZone, treeActive, treeNotes.stage, treeNotes.cancel]);
   return (
     <main className="app">
       <VisitorZone zone={cameraZone ?? interactionZone ?? "overview"} activity={activity} />
@@ -279,6 +276,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               paused={preview || paused}
               interactive={sceneInteractive && !treeNotes.modal}
               mode={mode}
+              treeClose={treeClose}
               hasSelectedFragment={Boolean(selected)}
               poolStep={poolStep}
               poolLayout={poolLayout}
@@ -295,7 +293,8 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               guideMenuRef={guideMenuRef}
             />
             {placed.tree && <TreeNotes3D notes={notes} controls={treeNotes}
-              enabled={treeActive && !treeNotes.modal} gesture={gesture} hiddenNoteIds={moderation.hiddenNoteIds} targets={treeTargets} />}
+              enabled={treeActive && !treeNotes.modal} gesture={gesture} hiddenNoteIds={moderation.hiddenNoteIds} targets={treeTargets}
+              onViewHover={setHotspotHint} />}
             {placed.north && <PoolFlowers3D layout={poolLayout} side={poolSide} flowers={flowers}
               controls={flowerControls} enabled={flowerActive}
               infoEnabled={sceneInteractive && !treeNotes.modal && !transitioning}
@@ -305,7 +304,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
           </Canvas>
         )}
       </div>
-      {!gpuReady && <LoadingScreen failed={loadFailed} />}
       {profiling && metrics && (
         <output className="scene-metrics">{metrics.fps} FPS · {metrics.calls} draws · {metrics.triangles} triangles · {metrics.programs} programs · {metrics.requests} requests · {(metrics.transferred / 1000000).toFixed(2)} MB transferred</output>
       )}
@@ -352,7 +350,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
                   onBlur={() => setHoveredZone(null)}
                   onClick={() => {
                     setHoveredZone(null);
-                    setPhotoOrigin(null);
                     setCameraZone(id);
                   }}
                 >
@@ -360,37 +357,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
                 </button>
               </React.Fragment>
             ))}
-          <div className="actions">
-            <button
-              className="button-circle"
-              title="Pause or resume the city"
-              onClick={() => setPaused((p) => !p)}
-            >
-              <Icon name={paused ? "play" : "pause"} />
-            </button>
-            <button
-              className="button-circle"
-              title="Reset puzzle"
-              onClick={() => {
-                setPlaced({
-                  sky: false,
-                  north: false,
-                  tree: false,
-                  street: false,
-                });
-                setTimeFrag(null);
-                setSelected(null);
-                setCameraZone(null);
-                setInteractionZone(null);
-                setPhotoOrigin(null);
-                setHoveredZone(null);
-                setViewReset((value) => value + 1);
-                say("The moment begins again.");
-              }}
-            >
-              <Icon name="reset" />
-            </button>
-          </div>
           <div className="scene-intro">
             <button
               className="button-circle fragment-help"
@@ -485,6 +451,39 @@ export default React.memo(function Experience({ preview = false, interactionBloc
           )}
         </>
       )}
+      <div className="actions memorial-actions">
+        {mode === "main" && !archiveOpen && <>
+            <button
+              className="button-circle"
+              title="Pause or resume the city"
+              onClick={() => setPaused((p) => !p)}
+            >
+              <Icon name={paused ? "play" : "pause"} />
+            </button>
+            <button
+              className="button-circle"
+              title="Reset puzzle"
+              onClick={() => {
+                setPlaced({
+                  sky: false,
+                  north: false,
+                  tree: false,
+                  street: false,
+                });
+                setTimeFrag(null);
+                setSelected(null);
+                setCameraZone(null);
+                setInteractionZone(null);
+                setHoveredZone(null);
+                setViewReset((value) => value + 1);
+                say("The moment begins again.");
+              }}
+            >
+              <Icon name="reset" />
+            </button>
+        </>}
+        {!preview && identity && <CollaborationStatus onEdit={onEditProfile} />}
+      </div>
       {interactionZone && !cameraZone && !archiveOpen && (
         <MemorialNavigation
           zone={interactionZone}
@@ -494,11 +493,6 @@ export default React.memo(function Experience({ preview = false, interactionBloc
             if (!transitioning) setPoolStep((step) => step + direction);
           }}
           onBack={() => setInteractionZone(null)}
-          onPhoto={() => {
-            setPhotoOrigin(interactionZone);
-            setCameraZone(interactionZone);
-            setInteractionZone(null);
-          }}
         />
       )}
       {hotspotHint && mode === "main" && !archiveOpen && (
@@ -514,19 +508,13 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               <b>{ZONENAMES[cameraZone]}</b>
               <span>{placed.sky ? period : "No observation"}</span>
             </div>
-            <div className="viewfinder">
-              {cameraZone === "north" && <button className="pool-photo-entry"
-                onClick={() => enterInteraction("north")} disabled={transitioning}>Leave a flower</button>}
-              {cameraZone === "tree" && treeNotes.stage === "idle" && (
-                <TreeNoteEntry controls={treeNotes} disabled={transitioning || !treeActive} />
-              )}
-            </div>
+            <div className="viewfinder" />
             <div className="viewer-controls">
               <button
                 className="viewer-back"
                 onClick={leavePhoto}
               >
-                {photoOrigin ? "Return to interaction" : "← Return to map"}
+                ← RETURN TO MAP
               </button>
               <button
                 className="shutter"
@@ -545,6 +533,10 @@ export default React.memo(function Experience({ preview = false, interactionBloc
       )}
       {interactionZone === "tree" && !cameraZone && treeActive && treeNotes.stage === "idle" && (
         <div className="tree-interaction-entry"><TreeNoteEntry controls={treeNotes} disabled={transitioning} /></div>
+      )}
+      {treeActive && !treeNotes.modal && hotspotHint?.zone === "messages" && (
+        <button className="tree-view-hint" style={{ left: hotspotHint.x, top: hotspotHint.y }}
+          onClick={treeNotes.viewMessages}><img src={`${import.meta.env.BASE_URL}svg/magnify.svg`} alt="" /> <span>View Messages</span></button>
       )}
       <TreeNotePanel controls={treeNotes} active={treeActive} notes={notes} moderation={moderation} />
       <TreeNoteAccessibility notes={notes} controls={treeNotes} active={treeActive && !treeNotes.modal && !transitioning}

@@ -1,12 +1,17 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { useCollaboration } from "../CollaborationProvider.jsx";
 import RoomShare from "./RoomShare.jsx";
 import VisitorPresence from "./VisitorPresence.jsx";
+const AvatarPreview = lazy(() => import("./AvatarPreview.jsx"));
 
-export default function CollaborationStatus({ onEdit }) {
+export default function CollaborationStatus({ onEdit, Preview = AvatarPreview }) {
   const { identity, status, visitors, error, storageWarning, reconnect, roomId } = useCollaboration();
+  if (!identity) return null;
   return (
     <aside className="collaboration-status" aria-label="Memorial connection">
+      <button className="visitor-edit button-circle" onClick={onEdit} aria-label={`Edit visitor profile: ${identity.username}`}>
+        <Suspense fallback={null}><Preview avatarType={identity.avatarType} /></Suspense>
+      </button>
       <details>
         <summary>
           <span className={`connection-dot ${status}`} aria-hidden="true" />
@@ -22,9 +27,6 @@ export default function CollaborationStatus({ onEdit }) {
           {status !== "offline" && (status !== "connected" || error) && <button onClick={reconnect}>Reconnect</button>}
         </div>
       </details>
-      <button className="visitor-edit" onClick={onEdit} aria-label="Edit visitor profile">
-        {identity.username}
-      </button>
     </aside>
   );
 }

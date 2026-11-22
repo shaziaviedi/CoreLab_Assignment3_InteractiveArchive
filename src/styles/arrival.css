@@ -25,6 +25,7 @@
   filter: blur(0);
   transform: scale(1);
 }
+.profile .experience-scene { filter: blur(6px); transform: scale(1); }
 .entered .experience-scene .app > :not(.three-stage) {
   opacity: 1;
 }

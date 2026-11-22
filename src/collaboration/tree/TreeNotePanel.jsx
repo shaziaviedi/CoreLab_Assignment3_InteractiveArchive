@@ -7,7 +7,7 @@ export function TreeNoteEntry({ controls, disabled }) {
   return (
     <div className="tree-note-entry">
       <button onClick={controls.begin} disabled={disabled}>Leave a message</button>
-      <small>Drag to circle the trunk · scroll or pinch to move closer</small>
+      <button className="tree-browse-access" onClick={controls.viewMessages} disabled={disabled}>View Messages</button>
     </div>
   );
 }
@@ -22,7 +22,6 @@ export default function TreeNotePanel({ controls, active, notes, moderation }) {
     return () => previous?.isConnected && previous.focus({ preventScroll: true });
   }, [active, stage]);
   if (!active || stage === "idle") return null;
-  const available = 24 - notes.length;
   const connected = status === "connected";
   const hidden = moderation?.hiddenNoteIds.has(selected?.id);
   function key(event) {
@@ -36,13 +35,21 @@ export default function TreeNotePanel({ controls, active, notes, moderation }) {
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
+  if (stage === "browse") return (
+    <section className="tree-placement-guide" aria-label="View messages">
+      <p>Drag to look around · select a paper tag to read it</p>
+      <button onClick={controls.begin}>Write a message</button>
+      <button onClick={controls.cancel}>Back to tree</button>
+    </section>
+  );
   if (stage === "place") return (
     <section className="tree-placement-guide" aria-label="Attach your message" onKeyDown={key}>
-      <p>{pending ? "Attaching your tag…" : available ? "Choose a glowing attachment point. Drag to look around, or Tab to a point and press Enter." : "All attachment points are occupied. Your draft is kept."}</p>
+      <p>{pending ? "Attaching your tag…" : "Move over the fence to choose a position. Drag to look around, or Tab to an attachment point."}</p>
       {!connected && <p role="status">Reconnect to attach your tag. Your draft is kept.</p>}
       {error && <p role="alert">{error}</p>}
       {controls.uncertain && <button onClick={controls.retry} disabled={pending || !connected}>Retry last position</button>}
       <button onClick={controls.edit} disabled={pending || controls.uncertain}>Edit message</button>
+      <button onClick={controls.viewMessages} disabled={pending}>View messages</button>
       <button onClick={controls.cancel} disabled={pending}>Cancel</button>
     </section>
   );

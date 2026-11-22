@@ -7,5 +7,5 @@ export const ESSENTIAL_MODELS = Object.freeze([
 export const VISITOR_MODELS = Object.freeze(["male-idle", "female-idle", "male-walk", "female-walk"]);
 export const PUBLIC_ASSETS = Object.freeze([
   ...[...ESSENTIAL_MODELS, ...VISITOR_MODELS].map((name) => `models/optimized/${name}.glb`),
-  "favicon.svg", ...["eye", "moon", "sun", "tree", "street", "north"].map((name) => `svg/${name}.svg`),
+  "favicon.svg", ...["eye", "magnify", "moon", "sun", "tree", "street", "north"].map((name) => `svg/${name}.svg`),
 ]);

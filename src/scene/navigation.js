@@ -4,6 +4,8 @@ import { POOL_SIDES } from "../../shared/protocol.js";
 import { SURVIVOR_TREE } from "./memorialLayout.js";
 
 export const sideIndex = (step) => ((step % 4) + 4) % 4;
+// The camera faces inward: its screen-right tangent opposes an outward map bearing.
+export const POOL_VIEW_SIDES = Object.freeze(["north", "west", "south", "east"]);
 export const TREE_ORBIT_RADIUS = 3.2;
 export const ease = (t) => t * t * (3 - 2 * t);
 
@@ -49,7 +51,7 @@ export function measurePoolLayout(model) {
 }
 
 export function poolCameraPosition(layout, step, out = new THREE.Vector3()) {
-  const angle = step * Math.PI / 2;
+  const angle = -step * Math.PI / 2;
   const sin = Math.sin(angle), cos = Math.cos(angle);
   // A rounded square keeps the whole path outside the basin, including corners.
   const scale = Math.pow(Math.abs(sin) ** 8 + Math.abs(cos) ** 8, -1 / 8);
@@ -75,7 +77,7 @@ export function treeCameraPosition(angle, out = new THREE.Vector3(), radius = TR
   const distance = THREE.MathUtils.clamp(radius, 2.6, 3.5);
   return out.set(
     SURVIVOR_TREE[0] + Math.sin(bearing) * distance,
-    1.7,
+    1.05,
     SURVIVOR_TREE[2] + Math.cos(bearing) * distance,
   );
 }

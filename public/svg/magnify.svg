@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs><filter id="glow"><feGaussianBlur stdDeviation="1.6"/></filter></defs><g fill="none" stroke="#fff1ce" stroke-width="2"><g filter="url(#glow)"><circle cx="15" cy="15" r="8"/><path d="m21 21 9 9"/></g><circle cx="15" cy="15" r="8"/><path d="m21 21 9 9"/></g></svg>

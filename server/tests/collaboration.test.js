@@ -1,3 +1,4 @@
+import { LAYOUT_VERSION } from "../../shared/memorialLayout.js";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
@@ -88,7 +89,7 @@ test("joining sends the room snapshot and broadcasts presence", async (t) => {
   const first = await join(a, "memorial", "A");
   assert.equal(first.ok, true);
   assert.deepEqual((await stateEvent)[0], first.state);
-  assert.equal(first.state.layoutVersion, 1);
+  assert.equal(first.state.layoutVersion, LAYOUT_VERSION);
   assert.equal(first.visitor.socketId, a.id);
   assert.match(first.visitor.visitorId, /^[0-9a-f-]{36}$/);
   assert.equal(first.visitor.joinedAt, new Date(first.visitor.joinedAt).toISOString());
@@ -123,7 +124,7 @@ test("contributions reach sender and room peers, but never another room", async 
     assert.equal((await echoed)[0][kind].id, result.record.id);
     if (kind === "flower")
       assert.deepEqual(Object.keys(result.record).sort(), [
-        "id", "roomId", "authorId", "authorName", "authorAvatar", "poolSide", "anchorId", "createdAt",
+        "id", "roomId", "authorId", "authorName", "authorAvatar", "roseColor", "poolSide", "anchorId", "createdAt",
       ].sort());
   }
   const newcomer = await client();

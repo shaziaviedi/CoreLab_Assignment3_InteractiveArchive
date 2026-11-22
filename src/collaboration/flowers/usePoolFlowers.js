@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function usePoolFlowers({ active, side, flowers, createFlower, status }) {
+  const [roseColor, setRoseColor] = useState("white");
   const [previewId, setPreviewId] = useState(null);
   const [info, setInfo] = useState(null);
   const [pending, setPending] = useState(false);
@@ -43,8 +44,11 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
     if (status !== "connected") { setError("Reconnect before leaving a flower."); return; }
     // An uncertain request keeps its ID per anchor. Choosing another anchor is
     // a separate deliberate gesture; double-clicks cannot start a second request.
-    if (!requests.current.has(anchor.id)) requests.current.set(anchor.id, crypto.randomUUID());
-    const payload = { requestId: requests.current.get(anchor.id), poolSide: anchor.poolSide, anchorId: anchor.id };
+    if (!requests.current.has(anchor.id)) requests.current.set(anchor.id, {
+      requestId: crypto.randomUUID(), poolSide: anchor.poolSide, anchorId: anchor.id, roseColor,
+    });
+    // Retry the complete original payload, including its color, after a lost ack.
+    const payload = requests.current.get(anchor.id);
     busy.current = true;
     setPending(true);
     setError("");
@@ -63,6 +67,6 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
       busy.current = false;
       if (mounted.current) setPending(false);
     }
-  }, [active, side, status, createFlower]);
-  return { previewId, info, pending, error, preview, clearPreview, place, showInfo, hideInfo, dismissInfo };
+  }, [active, side, status, createFlower, roseColor]);
+  return { roseColor, setRoseColor, previewId, info, pending, error, preview, clearPreview, place, showInfo, hideInfo, dismissInfo };
 }

@@ -1,8 +1,8 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { AVATAR_TYPES, LIMITS } from "../../../shared/protocol.js";
+import { AVATAR_TYPES } from "../../../shared/protocol.js";
 const AvatarPreview = lazy(() => import("./AvatarPreview.jsx"));
 
-export default function VisitorEntry({ identity, onSave, onCancel }) {
+export default function VisitorEntry({ identity, onSave, onCancel, Preview = AvatarPreview }) {
   const [username, setUsername] = useState(identity?.username ?? "");
   const [avatarType, setAvatarType] = useState(identity?.avatarType ?? "male");
   const [error, setError] = useState("");
@@ -12,7 +12,7 @@ export default function VisitorEntry({ identity, onSave, onCancel }) {
   useEffect(() => {
     const previous = document.activeElement;
     form.current?.querySelector("input")?.focus();
-    return () => previous?.focus({ preventScroll: true });
+    return () => previous?.isConnected && previous.focus({ preventScroll: true });
   }, []);
 
   function handleKeys(event) {
@@ -53,7 +53,7 @@ export default function VisitorEntry({ identity, onSave, onCancel }) {
           id="visitor-username"
           autoComplete="nickname"
           value={username}
-          aria-describedby={error ? "visitor-error" : "visitor-name-hint"}
+          aria-describedby={error ? "visitor-error" : undefined}
           aria-invalid={Boolean(error)}
           onChange={(event) => {
             setUsername(event.target.value);
@@ -61,7 +61,6 @@ export default function VisitorEntry({ identity, onSave, onCancel }) {
           }}
           required
         />
-        <small id="visitor-name-hint">Up to {LIMITS.username} characters · no account needed</small>
         <fieldset>
           <legend>Choose your avatar</legend>
           <div className="avatar-options">
@@ -75,7 +74,7 @@ export default function VisitorEntry({ identity, onSave, onCancel }) {
                 onClick={() => setAvatarType(type)}
               >
                 <Suspense fallback={<span className="avatar-preview">Loading preview</span>}>
-                  <AvatarPreview avatarType={type} />
+                  <Preview avatarType={type} />
                 </Suspense>
                 <span>{type === "male" ? "Male" : "Female"}</span>
               </button>

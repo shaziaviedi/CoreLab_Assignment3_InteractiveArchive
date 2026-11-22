@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { formatFlowerTime } from "./flowerProjection.js";
+import { ROSE_PALETTE, roseAppearance } from "./roseAppearance.js";
 
 export default function FlowerOverlay({ layout, side, flowers, controls, active, status, targets, tooltip }) {
   const occupied = useMemo(() => new Map(flowers.map((flower) => [flower.anchorId, flower])), [flowers]);
@@ -28,6 +29,14 @@ export default function FlowerOverlay({ layout, side, flowers, controls, active,
   }, [controls.dismissInfo, controls.info]);
   return (
     <div className="flower-overlay">
+      {active && <fieldset className="rose-colors" disabled={controls.pending}>
+        <legend>Rose color</legend>
+        {Object.entries(ROSE_PALETTE).map(([value, appearance]) => (
+          <button type="button" key={value} aria-label={`${appearance.label} rose`} title={appearance.label}
+            aria-pressed={(controls.roseColor ?? "white") === value} style={{ "--rose-color": appearance.color }}
+            onClick={() => controls.setRoseColor(value)} />
+        ))}
+      </fieldset>}
       {active && layout?.anchors.filter((anchor) => anchor.poolSide === side).map((anchor, index) => (
         <FlowerFocusTarget key={anchor.id} anchor={anchor} index={index} flower={occupied.get(anchor.id)}
           selectedId={selected?.id} controls={controls} status={status} targets={targets} />
@@ -43,7 +52,7 @@ export default function FlowerOverlay({ layout, side, flowers, controls, active,
       {active && (
         <div className="flower-placement-status" role="status" aria-live="polite">
           {controls.error || (controls.pending ? "Leaving your flower…" : status !== "connected"
-            ? "Reconnect to leave a flower." : "Hover a quiet point on the parapet · click to leave a white rose")}
+            ? "Reconnect to leave a flower." : "Hover a quiet point on the parapet · click to leave a rose")}
         </div>
       )}
     </div>
@@ -58,7 +67,7 @@ export function FlowerFocusTarget({ anchor, index, flower, selectedId, controls,
   return (
     <button className="flower-focus-target" hidden
       ref={(element) => { if (element) targets.current.set(anchor.id, element); else targets.current.delete(anchor.id); }}
-      aria-label={flower ? `White rose. ${information}` : `Place a white rose at position ${index + 1} on the ${anchor.poolSide} side`}
+      aria-label={flower ? `${roseAppearance(flower.roseColor).label} rose. ${information}` : `Place a ${roseAppearance(controls.roseColor).label.toLowerCase()} rose at position ${index + 1} on the ${anchor.poolSide} side`}
       aria-describedby={flower && selectedId === flower.id ? "flower-contributor" : undefined}
       aria-disabled={!flower && (controls.pending || status !== "connected")}
       onFocus={() => flower ? controls.showInfo(anchor.id, "focus") : controls.preview(anchor.id)}

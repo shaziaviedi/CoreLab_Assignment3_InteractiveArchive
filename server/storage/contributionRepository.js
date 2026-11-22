@@ -1,4 +1,5 @@
 import { RequestError } from "../validation.js";
+import { notesOverlap } from "../../shared/fenceLayout.js";
 
 // Process-local storage. Keep mutations here so a database can replace it later.
 export class ContributionRepository {
@@ -34,7 +35,7 @@ export class ContributionRepository {
     const room = this.getRoom(roomId);
     const contributions = kind === "note" ? room.notes : room.flowers;
     // No await between occupancy check and insert: the first valid request wins.
-    if (contributions.has(record.anchorId))
+    if (contributions.has(record.anchorId) || (kind === "note" && [...contributions.values()].some((note) => notesOverlap(note, record))))
       throw new RequestError(
         "ANCHOR_OCCUPIED",
         "This position is occupied. Choose another position.",

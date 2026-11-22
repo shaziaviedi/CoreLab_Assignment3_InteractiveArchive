@@ -52,7 +52,7 @@
   bottom: max(24px, env(safe-area-inset-bottom));
   white-space: nowrap;
 }
-.memorial-navigation button {
+.memorial-navigation button:not(.viewer-back) {
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 24px;
   padding: 11px 18px;

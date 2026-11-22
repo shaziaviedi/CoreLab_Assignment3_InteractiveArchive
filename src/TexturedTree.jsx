@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useModel } from "./scene/assets.js";
 import * as THREE from "three";
+import { treeTrunkCenter } from "./scene/treeAlignment.js";
 
 export default function TexturedTree({
   position,
@@ -138,7 +139,7 @@ export default function TexturedTree({
         : copy(node.material);
     });
     const box = new THREE.Box3().setFromObject(scene);
-    const center = box.getCenter(new THREE.Vector3());
+    const center = survivor ? treeTrunkCenter(scene) : box.getCenter(new THREE.Vector3());
     const height = bush ? 0.8 : survivor ? 4 : 3.7;
     const factor = height / Math.max(0.001, box.max.y - box.min.y);
     scene.position.set(

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { noteLength } from "./treeNoteLayout.js";
+import { placementFromId } from "../../../shared/fenceLayout.js";
 
-export default function useTreeNotes({ active, notes, createNote, status }) {
+export default function useTreeNotes({ active, notes, createNote, status, autoCompose = false }) {
   const [stage, setStage] = useState("idle");
   const [draft, setDraft] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -12,18 +13,20 @@ export default function useTreeNotes({ active, notes, createNote, status }) {
   const request = useRef(null);
   const busy = useRef(false);
   const mounted = useRef(true);
+  const previousStage = useRef("idle");
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
+    if (active && autoCompose) setStage("compose");
     if (!active) {
       setStage("idle");
       setSelectedId(null);
       setError("");
     }
-  }, [active]);
+  }, [active, autoCompose]);
   useEffect(() => { focusAnchor(null); }, [active, stage]);
   const cancel = useCallback(() => {
     if (busy.current) return;
-    setStage("idle");
+    setStage((current) => current === "read" ? previousStage.current : "idle");
     setSelectedId(null);
     setError("");
   }, []);
@@ -41,7 +44,8 @@ export default function useTreeNotes({ active, notes, createNote, status }) {
     if (!text || noteLength(text) > 180) return;
     // Keep the same request on timeout; a different draft or anchor gets a new ID.
     if (request.current?.anchorId !== anchorId || request.current?.text !== text)
-      request.current = { requestId: crypto.randomUUID(), anchorId, text };
+      request.current = { requestId: crypto.randomUUID(), anchorId, text,
+        fencePosition: placementFromId(anchorId)?.fencePosition };
     busy.current = true;
     setPending(true);
     setError("");
@@ -73,7 +77,8 @@ export default function useTreeNotes({ active, notes, createNote, status }) {
     retry: () => { if (request.current) place(request.current.anchorId); },
     continueToPlacement: () => { setError(""); setStage("place"); },
     edit: () => { if (!busy.current && !uncertain) setStage("compose"); },
-    read: (id) => { if (!busy.current) { setSelectedId(id); setStage("read"); } },
+    viewMessages: () => { if (!busy.current) { setSelectedId(null); setStage("browse"); } },
+    read: (id) => { if (!busy.current) { previousStage.current = stage === "read" ? previousStage.current : stage; setSelectedId(id); setStage("read"); } },
     selected: notes.find((note) => note.id === selectedId),
     modal: active && (stage === "compose" || stage === "read"),
   };

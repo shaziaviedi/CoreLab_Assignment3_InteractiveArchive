@@ -1,6 +1,12 @@
 import { POOL_SIDES } from "./protocol.js";
 
-export const LAYOUT_VERSION = 1;
+export const LAYOUT_VERSION = 3;
+
+// Keep the installation and its attachment transforms identical across clients.
+export const TREE_INSTALLATION = Object.freeze({
+  radius: 0.85, upperHeight: 0.82, lowerHeight: 0.46,
+  postHeight: 0.9, tagScale: 0.38, visitorClearance: 1.25,
+});
 
 // Stable placement IDs shared by the server and scene.
 export const NOTE_ANCHORS = Object.freeze(
