@@ -28,9 +28,9 @@ import {
 } from "./SceneShaders.js";
 import { OBS } from "./data.js";
 import MemorialCameraRig from "./scene/MemorialCameraRig.jsx";
+import useReducedMotion from "./scene/useReducedMotion.js";
 import { OVERVIEW, NORTH_POOL, SOUTH_POOL, SURVIVOR_TREE, CAMERA_PRESETS } from "./scene/memorialLayout.js";
 import { MemorialHotspot, HotspotGlow } from "./scene/MemorialHotspots.jsx";
-import PoolPlacementPreview from "./scene/PoolPlacementPreview.jsx";
 export { OVERVIEW } from "./scene/memorialLayout.js";
 
 // layout and seeded planting
@@ -1138,7 +1138,7 @@ function SceneLighting({ daylight, blend, celestial }) {
   );
 }
 
-export default function World3D({
+export default React.memo(function World3D({
   placed,
   period,
   paused,
@@ -1158,7 +1158,6 @@ export default function World3D({
   onEnterInteraction,
   onHotspotHover,
   onTransitionChange,
-  onSelectAnchor,
 }) {
   const blend = useRef(0);
   const celestial = useRef({
@@ -1175,10 +1174,7 @@ export default function World3D({
   useEffect(() => {
     guideElapsed.current = 0;
   }, [guideRun]);
-  const reducedMotion = useMemo(
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    [],
-  );
+  const reducedMotion = useReducedMotion();
   const daylight = useRef(0);
   const sunny = placed.sky && period === "afternoon";
   useFrame((_, dt) => {
@@ -1361,15 +1357,6 @@ export default function World3D({
           </>
         )}
       </MemorialHotspot>
-      {mode === "pool" && (
-        <PoolPlacementPreview
-          layout={poolLayout}
-          step={poolStep}
-          enabled={interactive}
-          gesture={gesture}
-          onSelect={onSelectAnchor}
-        />
-      )}
       <Suspense fallback={<PlaceholderMuseum />}>
         <ReferenceMuseum night={period === "evening"} />
       </Suspense>
@@ -1409,4 +1396,4 @@ export default function World3D({
       </EffectComposer>
     </>
   );
-}
+});

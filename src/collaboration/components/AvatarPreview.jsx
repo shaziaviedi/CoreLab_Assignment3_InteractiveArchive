@@ -18,6 +18,7 @@ function IdleAvatar({ avatarType }) {
   return (
     <group rotation={[0, -0.2, 0]}>
       <AnimatedVisitor
+        preview
         female={avatarType === "female"}
         moving={moving}
         simTime={simTime}

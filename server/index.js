@@ -8,7 +8,7 @@ httpServer.on("error", (error) => {
   console.error("Memorial server failed:", error.message);
   process.exitCode = 1;
 });
-httpServer.listen(config.port, () => {
+httpServer.listen(config.port, "0.0.0.0", () => {
   console.log(`ELSEWHERE memorial server listening on port ${config.port}`);
 });
 

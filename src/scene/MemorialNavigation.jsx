@@ -8,7 +8,7 @@ export default function MemorialNavigation({ zone, step, transitioning, onStep, 
     <section className="memorial-navigation" aria-label={`${zone === "tree" ? "Survivor Tree" : "North Pool"} interaction view`}>
       <div className="memorial-view-title">
         <span>{zone === "tree" ? "Survivor Tree" : "North Pool"}</span>
-        <small>{transitioning ? "Arriving" : zone === "tree" ? "Drag gently to look around" : "Explore the parapet"}</small>
+        <small>{transitioning ? "Arriving" : zone === "tree" ? "Drag around the trunk · scroll or pinch to move closer" : "Explore the parapet"}</small>
       </div>
       {zone === "north" && (
         <nav className="pool-side-navigation" aria-label="Pool sides">

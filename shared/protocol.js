@@ -14,3 +14,6 @@ export const AVATAR_TYPES = Object.freeze(["male", "female"]);
 export const ZONES = Object.freeze(["overview", "tree", "north", "street"]);
 export const POOL_SIDES = Object.freeze(["north", "east", "south", "west"]);
 export const LIMITS = Object.freeze({ username: 24, note: 180, roomId: 64 });
+
+export const ACTIVITIES = Object.freeze(["idle", "writing-note", "placing-note", "reading-note", "placing-flower"]);
+export const ACTIVITY_TTL_MS = 20000;

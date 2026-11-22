@@ -1,12 +1,8 @@
 import { useEffect, useMemo } from "react";
-import { useLoader } from "@react-three/fiber";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { useModel } from "./scene/assets.js";
 
 export default function ReferenceMuseum({ night }) {
-  const gltf = useLoader(
-    GLTFLoader,
-    import.meta.env.BASE_URL + "models/reference-museum.glb",
-  );
+  const gltf = useModel("reference-museum");
   const model = useMemo(() => {
     const scene = gltf.scene.clone(true);
     scene.traverse((node) => {

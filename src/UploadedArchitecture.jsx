@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useLoader } from "@react-three/fiber";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { useModel, useModels } from "./scene/assets.js";
 import * as THREE from "three";
 import { SKYLINE_COUNT, skylinePosition } from "./SkylineLayout.js";
 
@@ -62,10 +61,7 @@ function disposeMaterials(scene) {
 }
 
 export function UploadedOculus({ position, night }) {
-  const gltf = useLoader(
-    GLTFLoader,
-    import.meta.env.BASE_URL + "models/oculus.glb",
-  );
+  const gltf = useModel("oculus");
   const model = useMemo(() => {
     const scene = gltf.scene.clone(true);
     scene.traverse((node) => {
@@ -109,12 +105,7 @@ export function UploadedOculus({ position, night }) {
 }
 
 export function UploadedSkyline({ night }) {
-  const files = useLoader(
-    GLTFLoader,
-    ["city-lowpoly", "city-newyork", "one-world-trade-center"].map(
-      (name) => import.meta.env.BASE_URL + "models/" + name + ".glb",
-    ),
-  );
+  const files = useModels(["city-lowpoly", "city-newyork", "one-world-trade-center"]);
   const skyline = useMemo(() => {
     const root = new THREE.Group();
     const isOneWTC = (building) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import FragmentArt from "./FragmentArt.jsx";
@@ -9,8 +9,44 @@ import { Icon, Slot, ZoneStats, Archive } from "./ExperienceUI.jsx";
 import { VisitorZone } from "./collaboration/components/VisitorPresence.jsx";
 import useInteractionMode from "./scene/useInteractionMode.js";
 import MemorialNavigation from "./scene/MemorialNavigation.jsx";
+import { prepareSceneAssets } from "./scene/assets.js";
+import LoadingScreen from "./scene/LoadingScreen.jsx";
+import ScenePerformance from "./scene/ScenePerformance.jsx";
+import { useCollaboration } from "./collaboration/CollaborationProvider.jsx";
+import useTreeNotes from "./collaboration/tree/useTreeNotes.js";
+import TreeNotes3D from "./collaboration/tree/TreeNotes3D.jsx";
+import useHiddenNotes from "./collaboration/tree/useHiddenNotes.js";
+import TreeNoteAccessibility from "./collaboration/tree/TreeNoteAccessibility.jsx";
+import PresenceScene from "./collaboration/presence/PresenceScene.jsx";
+import PresenceLabels from "./collaboration/presence/PresenceLabels.jsx";
+import { peerVisitors } from "./collaboration/presence/presenceLayout.js";
+import CollaborationNotice from "./collaboration/components/CollaborationNotice.jsx";
+import TreeNotePanel, { TreeNoteEntry } from "./collaboration/tree/TreeNotePanel.jsx";
+import usePoolFlowers from "./collaboration/flowers/usePoolFlowers.js";
+import PoolFlowers3D from "./collaboration/flowers/PoolFlowers3D.jsx";
+import FlowerOverlay from "./collaboration/flowers/FlowerOverlay.jsx";
+import { POOL_SIDES } from "../shared/protocol.js";
+import { sideIndex } from "./scene/navigation.js";
 
-export default function Experience({ preview = false, interactionBlocked = false }) {
+export default React.memo(function Experience({ preview = false, interactionBlocked = false, onSceneReady }) {
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [gpuReady, setGpuReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [metrics, setMetrics] = useState(null);
+  const profiling = new URLSearchParams(window.location.search).has("profile");
+  useEffect(() => {
+    let active = true;
+    prepareSceneAssets().then(() => {
+      if (active) setAssetsReady(true);
+    }).catch(() => {
+      if (active) setLoadFailed(true);
+    });
+    return () => { active = false; };
+  }, []);
+  const markSceneReady = useCallback(() => {
+    setGpuReady(true);
+    onSceneReady?.(true);
+  }, [onSceneReady]);
   const [placed, setPlaced] = useState({
     sky: false,
     north: false,
@@ -39,6 +75,7 @@ export default function Experience({ preview = false, interactionBlocked = false
   const [toastKey, setToastKey] = useState(0);
   const [guideActive, setGuideActive] = useState(false);
   const guideTimer = useRef(null);
+  const flashTimer = useRef(null);
   const guideMenuRef = useRef(null);
   const [guideRun, setGuideRun] = useState(0);
   const frameRef = useRef(null);
@@ -53,7 +90,21 @@ export default function Experience({ preview = false, interactionBlocked = false
   const period = timeFrag === "moon" ? "evening" : "afternoon";
   const mode = cameraZone ? "photo" : interactionZone === "tree" ? "tree" :
     interactionZone === "north" ? "pool" : "main";
-  const sceneInteractive = !preview && !interactionBlocked && !archiveOpen;
+  const sceneInteractive = gpuReady && !preview && !interactionBlocked && !archiveOpen;
+  const { notes, createNote, flowers, createFlower, status, visitors, identity, roomId, announcement } = useCollaboration();
+  const treeActive = sceneInteractive && (interactionZone === "tree" || cameraZone === "tree");
+  const treeNotes = useTreeNotes({ active: treeActive, notes, createNote, status });
+  const poolSide = POOL_SIDES[sideIndex(poolStep)];
+  const flowerActive = sceneInteractive && mode === "pool" && !transitioning;
+  const flowerControls = usePoolFlowers({ active: flowerActive, side: poolSide, flowers, createFlower, status });
+  const flowerTargets = useRef(new Map());
+  const flowerTooltip = useRef(null);
+  const moderation = useHiddenNotes(roomId);
+  const treeTargets = useRef(new Map());
+  const presenceLabels = useRef(new Map());
+  const peers = useMemo(() => peerVisitors(visitors, identity?.visitorId), [visitors, identity?.visitorId]);
+  const activity = treeActive ? (treeNotes.stage === "compose" ? "writing-note" : treeNotes.stage === "place" ? "placing-note" :
+    treeNotes.stage === "read" ? "reading-note" : "idle") : flowerActive && (flowerControls.previewId || flowerControls.pending) ? "placing-flower" : "idle";
   const say = useCallback((message, duration = 3100) => {
     setToast(message);
     setToastDuration(duration);
@@ -71,9 +122,6 @@ export default function Experience({ preview = false, interactionBlocked = false
     setHoveredZone(null);
     setHotspotHint(null);
   }, []);
-  const selectAnchor = useCallback((anchor) => {
-    say("Position selected · " + anchor.id);
-  }, [say]);
   function leavePhoto() {
     setCameraZone(null);
     setInteractionZone(photoOrigin);
@@ -83,6 +131,7 @@ export default function Experience({ preview = false, interactionBlocked = false
     () => () => {
       clearTimeout(guideTimer.current);
       clearTimeout(toastTimer.current);
+      clearTimeout(flashTimer.current);
     },
     [],
   );
@@ -172,12 +221,17 @@ export default function Experience({ preview = false, interactionBlocked = false
       },
     ]);
     setFlash(true);
-    setTimeout(() => setFlash(false), 650);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(false), 650);
     say("One moment, preserved.");
   }
   useEffect(() => {
     function key(e) {
       if (interactionBlocked) return;
+      if (treeActive && treeNotes.stage !== "idle") {
+        if (e.key === "Escape") treeNotes.cancel();
+        return;
+      }
       if (e.key === "Escape") {
         if (archiveOpen) {
           setArchiveOpen(false);
@@ -196,52 +250,65 @@ export default function Experience({ preview = false, interactionBlocked = false
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [interactionBlocked, archiveOpen, cameraZone, photoOrigin]);
+  }, [interactionBlocked, archiveOpen, cameraZone, photoOrigin, treeActive, treeNotes.stage, treeNotes.cancel]);
   return (
     <main className="app">
-      <VisitorZone zone={cameraZone ?? interactionZone ?? "overview"} />
+      <VisitorZone zone={cameraZone ?? interactionZone ?? "overview"} activity={activity} />
       <div className="three-stage">
-        <Canvas
-          shadows
-          camera={{ position: OVERVIEW.pos, fov: 42, near: 0.1, far: 280 }}
-          gl={{
-            antialias: true,
-            alpha: false,
-            preserveDrawingBuffer: true,
-            powerPreference: "high-performance",
-            toneMapping: THREE.ACESFilmicToneMapping,
-            toneMappingExposure: 1.5,
-          }}
-          dpr={[1, 1.8]}
-          onCreated={({ gl, scene, camera }) => {
-            glRef.current = gl;
-            frameRef.current = { scene, camera };
-          }}
-        >
-          <World3D
-            placed={placed}
-            period={period}
-            paused={preview || paused}
-            interactive={sceneInteractive}
-            mode={mode}
-            hasSelectedFragment={Boolean(selected)}
-            poolStep={poolStep}
-            poolLayout={poolLayout}
-            onPoolLayout={setPoolLayout}
-            gesture={gesture}
-            onEnterInteraction={enterInteraction}
-            onHotspotHover={setHotspotHint}
-            onTransitionChange={setTransitioning}
-            onSelectAnchor={selectAnchor}
-            viewReset={viewReset}
-            cameraZone={cameraZone}
-            overlays={overlays}
-            guideActive={guideActive}
-            guideRun={guideRun}
-            guideMenuRef={guideMenuRef}
-          />
-        </Canvas>
+        {assetsReady && (
+          <Canvas
+            shadows="percentage"
+            camera={{ position: OVERVIEW.pos, fov: 42, near: 0.1, far: 280 }}
+            gl={{
+              antialias: true,
+              alpha: false,
+              preserveDrawingBuffer: true,
+              powerPreference: "high-performance",
+              toneMapping: THREE.ACESFilmicToneMapping,
+              toneMappingExposure: 1.5,
+            }}
+            dpr={[1, 1.8]}
+            onCreated={({ gl, scene, camera }) => {
+              glRef.current = gl;
+              frameRef.current = { scene, camera };
+            }}
+          >
+            <World3D
+              placed={placed}
+              period={period}
+              paused={preview || paused}
+              interactive={sceneInteractive && !treeNotes.modal}
+              mode={mode}
+              hasSelectedFragment={Boolean(selected)}
+              poolStep={poolStep}
+              poolLayout={poolLayout}
+              onPoolLayout={setPoolLayout}
+              gesture={gesture}
+              onEnterInteraction={enterInteraction}
+              onHotspotHover={setHotspotHint}
+              onTransitionChange={setTransitioning}
+              viewReset={viewReset}
+              cameraZone={cameraZone}
+              overlays={overlays}
+              guideActive={guideActive}
+              guideRun={guideRun}
+              guideMenuRef={guideMenuRef}
+            />
+            {placed.tree && <TreeNotes3D notes={notes} controls={treeNotes}
+              enabled={treeActive && !treeNotes.modal} gesture={gesture} hiddenNoteIds={moderation.hiddenNoteIds} targets={treeTargets} />}
+            {placed.north && <PoolFlowers3D layout={poolLayout} side={poolSide} flowers={flowers}
+              controls={flowerControls} enabled={flowerActive}
+              infoEnabled={sceneInteractive && !treeNotes.modal && !transitioning}
+              gesture={gesture} targets={flowerTargets} tooltip={flowerTooltip} />}
+            <PresenceScene peers={peers} layout={poolLayout} labels={presenceLabels} enabled={sceneInteractive} />
+            <ScenePerformance onReady={markSceneReady} onSample={profiling ? setMetrics : undefined} />
+          </Canvas>
+        )}
       </div>
+      {!gpuReady && <LoadingScreen failed={loadFailed} />}
+      {profiling && metrics && (
+        <output className="scene-metrics">{metrics.fps} FPS · {metrics.calls} draws · {metrics.triangles} triangles · {metrics.programs} programs · {metrics.requests} requests · {(metrics.transferred / 1000000).toFixed(2)} MB transferred</output>
+      )}
       <div className="film-grain" />
       <div className="vignette" />
       {mode === "main" && !archiveOpen && (
@@ -447,7 +514,13 @@ export default function Experience({ preview = false, interactionBlocked = false
               <b>{ZONENAMES[cameraZone]}</b>
               <span>{placed.sky ? period : "No observation"}</span>
             </div>
-            <div className="viewfinder" />
+            <div className="viewfinder">
+              {cameraZone === "north" && <button className="pool-photo-entry"
+                onClick={() => enterInteraction("north")} disabled={transitioning}>Leave a flower</button>}
+              {cameraZone === "tree" && treeNotes.stage === "idle" && (
+                <TreeNoteEntry controls={treeNotes} disabled={transitioning || !treeActive} />
+              )}
+            </div>
             <div className="viewer-controls">
               <button
                 className="viewer-back"
@@ -470,6 +543,17 @@ export default function Experience({ preview = false, interactionBlocked = false
           </div>
         </>
       )}
+      {interactionZone === "tree" && !cameraZone && treeActive && treeNotes.stage === "idle" && (
+        <div className="tree-interaction-entry"><TreeNoteEntry controls={treeNotes} disabled={transitioning} /></div>
+      )}
+      <TreeNotePanel controls={treeNotes} active={treeActive} notes={notes} moderation={moderation} />
+      <TreeNoteAccessibility notes={notes} controls={treeNotes} active={treeActive && !treeNotes.modal && !transitioning}
+        targets={treeTargets} hiddenNoteIds={moderation.hiddenNoteIds} />
+      <PresenceLabels peers={peers} labels={presenceLabels} />
+      <CollaborationNotice announcement={announcement} enabled={sceneInteractive && !treeNotes.modal} />
+      {placed.north && <FlowerOverlay layout={poolLayout} side={poolSide} flowers={flowers}
+        controls={flowerControls} active={flowerActive} status={status}
+        targets={flowerTargets} tooltip={flowerTooltip} />}
       {archiveOpen && (
         <Archive photos={photos} onClose={() => setArchiveOpen(false)} />
       )}
@@ -486,4 +570,4 @@ export default function Experience({ preview = false, interactionBlocked = false
       {flash && <div className="screen-flash" />}
     </main>
   );
-}
+});

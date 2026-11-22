@@ -1,60 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { loadPoolGeometry } from "./helpers/poolGeometry.js";
 import test from "node:test";
 import * as THREE from "three";
-import { measurePoolLayout, poolCameraPosition, poolCameraTarget, treeCameraPosition, sideIndex, transitionPosition, safeCameraPosition } from "../../src/scene/navigation.js";
+import { measurePoolLayout, poolCameraPosition, poolCameraTarget, treeCameraPosition, clearTreeOrbit, sideIndex, transitionPosition, safeCameraPosition } from "../../src/scene/navigation.js";
 import { NORTH_POOL, POOL_SCALE, SURVIVOR_TREE, CAMERA_PRESETS, OVERVIEW } from "../../src/scene/memorialLayout.js";
 import { canActivate } from "../../src/scene/useInteractionMode.js";
-
-// Decode only mesh positions and indices; the real GLB supplies all test geometry.
-function loadPoolGeometry() {
-  const bytes = readFileSync(new URL("../../public/models/reference-pool.glb", import.meta.url));
-  const jsonLength = bytes.readUInt32LE(12);
-  const gltf = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
-  const binaryStart = 20 + jsonLength + 8;
-  const types = { 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
-  function attribute(index) {
-    const accessor = gltf.accessors[index], view = gltf.bufferViews[accessor.bufferView];
-    const width = accessor.type === "VEC3" ? 3 : 1;
-    const Type = types[accessor.componentType];
-    const start = binaryStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-    const values = new Type(accessor.count * width);
-    const stride = view.byteStride ?? width * Type.BYTES_PER_ELEMENT;
-    const read = accessor.componentType === 5126 ? "readFloatLE" :
-      accessor.componentType === 5125 ? "readUInt32LE" : "readUInt16LE";
-    for (let vertex = 0; vertex < accessor.count; vertex++)
-      for (let component = 0; component < width; component++)
-        values[vertex * width + component] = bytes[read](start + vertex * stride + component * Type.BYTES_PER_ELEMENT);
-    return new THREE.BufferAttribute(values, width);
-  }
-  function node(index) {
-    const source = gltf.nodes[index];
-    const group = new THREE.Group();
-    if (source.matrix) group.applyMatrix4(new THREE.Matrix4().fromArray(source.matrix));
-    else {
-      group.position.fromArray(source.translation ?? [0, 0, 0]);
-      group.quaternion.fromArray(source.rotation ?? [0, 0, 0, 1]);
-      group.scale.fromArray(source.scale ?? [1, 1, 1]);
-    }
-    if (source.mesh !== undefined) {
-      for (const primitive of gltf.meshes[source.mesh].primitives) {
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", attribute(primitive.attributes.POSITION));
-        if (primitive.indices !== undefined) geometry.setIndex(attribute(primitive.indices));
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
-        mesh.name = source.name;
-        group.add(mesh);
-      }
-    }
-    (source.children ?? []).forEach((child) => group.add(node(child)));
-    return group;
-  }
-  const root = new THREE.Group();
-  root.position.fromArray(NORTH_POOL);
-  root.scale.setScalar(POOL_SCALE);
-  gltf.scenes[gltf.scene ?? 0].nodes.forEach((index) => root.add(node(index)));
-  return root;
-}
 
 const layout = measurePoolLayout(loadPoolGeometry());
 
@@ -87,9 +37,13 @@ test("all pool side transitions, including wraps, remain outside the basin", () 
   assert.ok(poolCameraPosition(layout, 0).distanceTo(poolCameraPosition(layout, 4)) < 1e-10);
 });
 
-test("tree orbit stays bounded and transfer endpoints preserve every view", () => {
-  assert.deepEqual(treeCameraPosition(-100).toArray(), treeCameraPosition(-0.32).toArray());
-  assert.deepEqual(treeCameraPosition(100).toArray(), treeCameraPosition(0.32).toArray());
+test("tree orbit covers every angle close to the trunk and transfers preserve every view", () => {
+  for (let angle = -Math.PI * 4; angle <= Math.PI * 4; angle += 0.1) {
+    assert.ok(treeCameraPosition(angle).distanceTo(treeCameraPosition(angle + Math.PI * 2)) < 1e-10);
+    const position = treeCameraPosition(angle);
+    assert.ok(Math.abs(Math.hypot(position.x - SURVIVOR_TREE[0], position.z - SURVIVOR_TREE[2]) - 3.2) < 1e-10);
+    assert.equal(position.y, 1.7);
+  }
   const views = [OVERVIEW.pos, ...Object.values(CAMERA_PRESETS).map((view) => view.pos),
     treeCameraPosition(0).toArray(), ...[0, 1, 2, 3].map((side) => poolCameraPosition(layout, side).toArray())];
   for (const start of views) for (const end of views) {
@@ -99,7 +53,7 @@ test("tree orbit stays bounded and transfer endpoints preserve every view", () =
     transitionPosition(new THREE.Vector3(...start), new THREE.Vector3(...end), 1, [], out);
     assert.ok(out.distanceTo(new THREE.Vector3(...end)) < 1e-10);
   }
-  assert.ok(treeCameraPosition(0).distanceTo(new THREE.Vector3(...SURVIVOR_TREE)) > 7);
+  assert.ok(treeCameraPosition(0).distanceTo(new THREE.Vector3(...SURVIVOR_TREE)) < 4);
 });
 
 test("each pool view frames its central parapet preview anchors", () => {
@@ -127,4 +81,16 @@ test("collision clearance and gesture ownership prevent clipping and accidental 
     assert.equal(canActivate({ ...gesture, ...blocked }, { button: 0, delta: 0 }), false);
   assert.equal(canActivate(gesture, { button: 0, delta: 20 }), false);
   assert.equal(canActivate(gesture, { button: 2, delta: 0 }), false);
+});
+
+
+test("tree orbit avoids nearby trunks without rising into the canopy", () => {
+  const blocker = new THREE.Box3(new THREE.Vector3(-3.35, 0, 12.6), new THREE.Vector3(-2.65, 2.6, 13.3));
+  const position = treeCameraPosition(0.5);
+  const cleared = clearTreeOrbit(position, [blocker]);
+  assert.equal(cleared.y, 1.7);
+  assert.ok(cleared.z < blocker.min.z - 0.2);
+  assert.equal(blocker.containsPoint(cleared), false);
+  for (let angle = 0; angle < Math.PI * 2; angle += 0.05)
+    assert.ok(treeCameraPosition(angle, new THREE.Vector3(), 100).x < 0.83, "Zoom must remain outside the South Pool's west edge");
 });

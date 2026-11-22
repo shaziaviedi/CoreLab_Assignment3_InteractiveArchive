@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame, useLoader } from "@react-three/fiber";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useModels } from "./scene/assets.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
+import { visitorInView } from "./scene/visitorVisibility.js";
 
 export default function AnimatedVisitor({
   female,
@@ -10,25 +11,25 @@ export default function AnimatedVisitor({
   locomotion,
   simTime,
   seed,
+  preview = false,
+  presence = false,
 }) {
   const gender = female ? "female" : "male";
-  const [idle, walk] = useLoader(
-    GLTFLoader,
-    ["idle", "walk"].map(
-      (action) =>
-        import.meta.env.BASE_URL + "models/" + gender + "-" + action + ".glb",
-    ),
-  );
+  const { camera } = useThree();
+  const worldPosition = useMemo(() => new THREE.Vector3(), []);
+  const [idle, walk = idle] = useModels(preview ? [`${gender}-idle`] : [`${gender}-idle`, `${gender}-walk`]);
   const previousTime = useRef(simTime.current);
   const active = useRef(null);
   const actor = useMemo(() => {
     const scene = clone(idle.scene);
     scene.traverse((node) => {
       if (!node.isMesh) return;
-      node.castShadow = true;
+      node.castShadow = !presence;
+      if (presence) node.raycast = () => null;
       node.frustumCulled = false;
       const copy = (source) => {
         const material = source.clone();
+        if (presence) { material.transparent = true; material.depthWrite = false; }
         const palette = ["#d9cce5", "#bfd7df", "#e5cbd0", "#cbdacb", "#e3d8c7"];
         material.roughness = 0.85;
         material.metalness = 0;
@@ -120,7 +121,7 @@ export default function AnimatedVisitor({
       hipPoint: new THREE.Vector3(),
       ground: new THREE.Vector3(),
     };
-  }, [idle, walk, seed]);
+  }, [idle, walk, seed, presence]);
   useEffect(() => {
     active.current = actor.idleAction;
     previousTime.current = simTime.current;
@@ -136,7 +137,7 @@ export default function AnimatedVisitor({
       });
     };
   }, [actor, simTime]);
-  useFrame(() => {
+  useFrame(({ clock }) => {
     const next = moving.current ? actor.walkAction : actor.idleAction;
     if (active.current !== next) {
       next.reset().play();
@@ -150,6 +151,7 @@ export default function AnimatedVisitor({
     previousTime.current = simTime.current;
     actor.walkAction.timeScale = locomotion?.current ?? 1;
     actor.mixer.update(delta);
+    if (delta === 0) return;
     actor.root.updateWorldMatrix(true, true);
     actor.root.updateMatrixWorld(true);
     // cancel clip root motion; routes own travel
@@ -161,6 +163,10 @@ export default function AnimatedVisitor({
       actor.root.updateWorldMatrix(true, true);
       actor.root.updateMatrixWorld(true);
     }
+    actor.root.parent.getWorldPosition(worldPosition);
+    // Keep clip time and route alignment continuous, including shadow casters.
+    // Only the expensive sole-vertex sampling waits until an actor is in view.
+    if (!preview && !visitorInView(camera, clock.elapsedTime, worldPosition)) return;
     let soleY = Infinity;
     for (const { mesh, indices } of actor.soleVertices) {
       if (mesh.isSkinnedMesh) mesh.skeleton.update();

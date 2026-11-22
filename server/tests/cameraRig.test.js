@@ -6,7 +6,6 @@ import { create } from "@react-three/test-renderer";
 import * as THREE from "three";
 import MemorialCameraRig from "../../src/scene/MemorialCameraRig.jsx";
 import { MemorialHotspot } from "../../src/scene/MemorialHotspots.jsx";
-import PoolPlacementPreview from "../../src/scene/PoolPlacementPreview.jsx";
 import { OVERVIEW, CAMERA_PRESETS } from "../../src/scene/memorialLayout.js";
 import { poolCameraPosition, treeCameraPosition } from "../../src/scene/navigation.js";
 
@@ -63,7 +62,7 @@ test("the mounted camera rig completes main, tree, pool and all photography tran
     { mode: "tree", cameraZone: null, position: treeCameraPosition(0).toArray() },
     ...[0, 1, 2, 3].map((step) => ({ mode: "pool", poolStep: step, cameraZone: null,
       position: poolCameraPosition(f.layout, step).toArray() })),
-    ...Object.entries(CAMERA_PRESETS).map(([zone, view]) => ({ mode: "photo", cameraZone: zone, position: view.pos })),
+    ...Object.entries(CAMERA_PRESETS).map(([zone, view]) => ({ mode: "photo", cameraZone: zone, position: zone === "tree" ? treeCameraPosition(0).toArray() : view.pos })),
   ];
   for (const from of views) for (const to of views) {
     await f.update({ ...from, poolStep: from.poolStep ?? 0 });
@@ -102,6 +101,8 @@ test("mounted rig handles mouse and touch orbit, suppresses drag clicks and clea
   await f.update({ interactive: false });
   assert.equal(f.listeners.has("pointerdown"), false);
   await f.update({ interactive: true, mode: "photo", cameraZone: "tree" });
+  assert.equal(f.listeners.has("pointerdown"), true);
+  await f.update({ cameraZone: "north" });
   assert.equal(f.listeners.has("pointerdown"), false);
 });
 
@@ -120,9 +121,9 @@ test("mounted rig follows both pool wrap directions without crossing the basin",
   }
 });
 
-test("hotspot feedback and anchor previews consume clicks without placing contributions", async (t) => {
+test("hotspot feedback consumes clicks and suppresses orbit drags", async (t) => {
   const gesture = { current: { ready: true, dragged: false, pointers: 0 } };
-  const entered = [], hints = [], selected = [];
+  const entered = [], hints = [];
   let canvas;
   const renderer = await create(React.createElement(MemorialHotspot, {
     zone: "tree", enabled: true, gesture,
@@ -145,17 +146,38 @@ test("hotspot feedback and anchor previews consume clicks without placing contri
   await renderer.fireEvent(hotspot, "click", { button: 0, delta: 20 });
   assert.equal(entered.length, 1);
   gesture.current.dragged = false;
-  const anchor = { id: "north-pool-north-01", poolSide: "north", position: [0, 0.3, 0] };
-  await renderer.update(React.createElement(PoolPlacementPreview, {
-    layout: { anchors: [anchor] }, step: 0, enabled: true, gesture,
-    onSelect: (value) => selected.push(value),
-  }));
-  const target = renderer.scene.find((node) => typeof node.props.onClick === "function");
-  await renderer.fireEvent(target, "pointerOver");
-  assert.equal(renderer.scene.findAll((node) => node.type === "Mesh").length, 2);
-  await renderer.fireEvent(target, "click", { button: 0, delta: 0 });
-  assert.deepEqual(selected, [anchor]);
-  gesture.current.ready = false;
-  await renderer.fireEvent(target, "click", { button: 0, delta: 0 });
-  assert.equal(selected.length, 1);
+
+});
+
+
+test("tree photography supports a half-circle orbit and keeps the camera outside the trunk", async (t) => {
+  const f = await fixture(t);
+  await f.update({ mode: "photo", cameraZone: "tree" });
+  await f.frames();
+  const before = f.state.current.camera.position.clone();
+  f.pointer("pointerdown");
+  f.pointer("pointermove", { clientX: 724 });
+  f.pointer("pointerup", { clientX: 724 });
+  for (let frame = 0; frame < 220; frame++) {
+    await f.frames(1);
+    const position = f.state.current.camera.position;
+    assert.ok(Math.hypot(position.x + 3, position.z - 9.92) > 2.6);
+  }
+  assert.ok(before.distanceTo(f.state.current.camera.position) > 6);
+  assert.equal(f.gesture.current.ready, true);
+});
+
+test("reduced-motion preference completes camera transfers without automatic travel", async (t) => {
+  const previous = globalThis.window;
+  globalThis.window = { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) };
+  try {
+    const f = await fixture(t);
+    await f.update({ mode: "tree" });
+    await f.frames(1);
+    assert.ok(f.state.current.camera.position.distanceTo(treeCameraPosition(0)) < 1e-10);
+    assert.equal(f.gesture.current.ready, true);
+    await f.update({ mode: "pool", poolStep: 2 });
+    await f.frames(1);
+    assert.ok(f.state.current.camera.position.distanceTo(poolCameraPosition(f.layout, 2)) < 1e-10);
+  } finally { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; }
 });

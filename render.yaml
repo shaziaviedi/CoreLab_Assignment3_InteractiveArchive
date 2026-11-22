@@ -1,0 +1,18 @@
+# Single process: occupied anchors and contributions currently live in memory.
+services:
+  - type: web
+    name: elsewhere-memorial
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: https://shaziaviedi.github.io,https://core-lab-assignment3-interactive-ar.vercel.app
+      - key: CONTRIBUTION_LIMIT
+        value: "6"
+      - key: CONTRIBUTION_WINDOW_MS
+        value: "60000"

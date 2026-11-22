@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { LAYOUT_VERSION } from "../../shared/memorialLayout.js";
-import { RequestError } from "../validation.js";
+import { ACTIVITY_TTL_MS } from "../../shared/protocol.js";
+import { RequestError, validateActivityZone } from "../validation.js";
 
 export const roomChannel = (roomId) => `memorial:${roomId}`;
 
@@ -10,6 +11,7 @@ export class RoomService {
   }
 
   join(socket, profile) {
+    validateActivityZone(profile.activity, profile.currentZone);
     const visitor = {
       socketId: socket.id,
       visitorId: socket.data.visitorId ?? profile.visitorId ?? randomUUID(),
@@ -17,6 +19,8 @@ export class RoomService {
       avatarType: profile.avatarType,
       currentZone: profile.currentZone,
       joinedAt: new Date().toISOString(),
+      activity: profile.activity ?? "idle",
+      activityExpiresAt: profile.activity && profile.activity !== "idle" ? new Date(Date.now() + ACTIVITY_TTL_MS).toISOString() : null,
     };
     socket.data.visitorId = visitor.visitorId;
     socket.data.roomId = profile.roomId;
@@ -32,7 +36,11 @@ export class RoomService {
   }
 
   update(socket, changes) {
-    const visitor = { ...this.requireVisitor(socket), ...changes };
+    const previous = this.requireVisitor(socket);
+    const activity = changes.activity ?? (changes.currentZone ? "idle" : previous.activity ?? "idle");
+    const visitor = { ...previous, ...changes, activity };
+    validateActivityZone(visitor.activity, visitor.currentZone);
+    visitor.activityExpiresAt = activity === "idle" ? null : new Date(Date.now() + ACTIVITY_TTL_MS).toISOString();
     socket.data.visitor = visitor;
     this.repository.putVisitor(socket.data.roomId, visitor);
     return visitor;

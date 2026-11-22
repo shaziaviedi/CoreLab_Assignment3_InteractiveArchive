@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AVATAR_TYPES, LIMITS } from "../../../shared/protocol.js";
-import AvatarPreview from "./AvatarPreview.jsx";
+const AvatarPreview = lazy(() => import("./AvatarPreview.jsx"));
 
 export default function VisitorEntry({ identity, onSave, onCancel }) {
   const [username, setUsername] = useState(identity?.username ?? "");
@@ -74,7 +74,9 @@ export default function VisitorEntry({ identity, onSave, onCancel }) {
                 aria-pressed={avatarType === type}
                 onClick={() => setAvatarType(type)}
               >
-                <AvatarPreview avatarType={type} />
+                <Suspense fallback={<span className="avatar-preview">Loading preview</span>}>
+                  <AvatarPreview avatarType={type} />
+                </Suspense>
                 <span>{type === "male" ? "Male" : "Female"}</span>
               </button>
             ))}

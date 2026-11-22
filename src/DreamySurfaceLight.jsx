@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Color, Uniform, Vector3 } from "three";
+import { observeObjectTree } from "./scene/objectLifecycle.js";
 
 // view-dependent glints over existing shaders
 export default function DreamySurfaceLight({ celestial, lightPosition }) {
   const { scene } = useThree();
-  const scanTime = useRef(0.5);
-  const materials = useMemo(() => new Map(), []);
   const uniforms = useMemo(
     () => ({
       dreamStrength: new Uniform(0),
@@ -19,7 +18,7 @@ export default function DreamySurfaceLight({ celestial, lightPosition }) {
     () => [new Color("#fff0cf"), new Color("#c0d8ff")],
     [],
   );
-  useFrame((_, dt) => {
+  useFrame(() => {
     const state = celestial.current;
     const altitude = Math.max(state.sun, state.moon);
     const moon = state.moon > state.sun;
@@ -31,20 +30,16 @@ export default function DreamySurfaceLight({ celestial, lightPosition }) {
     uniforms.dreamDirection.value.copy(lightPosition);
     uniforms.dreamDirection.value.y -= 45 * (1 - altitude);
     uniforms.dreamDirection.value.normalize();
-    scanTime.current += dt;
-    if (scanTime.current < 0.5) return;
-    scanTime.current = 0;
-    scene.traverse((node) => {
-      if (!node.isMesh) return;
-      for (const material of Array.isArray(node.material)
-        ? node.material
-        : [node.material]) {
-        if (!material?.isMeshStandardMaterial || materials.has(material))
-          continue;
+  });
+  useLayoutEffect(() => {
+    const materials = new Map();
+    const meshes = new Map();
+    function acquire(material) {
+      if (materials.has(material)) return materials.get(material);
+      const record = (() => {
         const before = material.onBeforeCompile,
           key = material.customProgramCacheKey;
         const programKey = key.call(material);
-        materials.set(material, { before, key });
         material.onBeforeCompile = function (shader, renderer) {
           before.call(this, shader, renderer);
           Object.assign(shader.uniforms, uniforms);
@@ -67,19 +62,39 @@ export default function DreamySurfaceLight({ celestial, lightPosition }) {
         material.customProgramCacheKey = () =>
           programKey + "|dream-surface-light-v1";
         material.needsUpdate = true;
+        return { before, key, count: 0 };
+      })();
+      materials.set(material, record);
+      return record;
+    }
+    function release(mesh) {
+      const entry = meshes.get(mesh);
+      if (!entry) return;
+      mesh.onBeforeRender = entry.beforeRender;
+      for (const material of entry.used) {
+        const record = materials.get(material);
+        record.count--;
+        if (!record.count) {
+          material.onBeforeCompile = record.before;
+          material.customProgramCacheKey = record.key;
+          material.needsUpdate = true;
+          materials.delete(material);
+        }
       }
-    });
-  });
-  useEffect(
-    () => () => {
-      for (const [material, { before, key }] of materials) {
-        material.onBeforeCompile = before;
-        material.customProgramCacheKey = key;
-        material.needsUpdate = true;
-      }
-      materials.clear();
-    },
-    [materials],
-  );
+      meshes.delete(mesh);
+    }
+    return observeObjectTree(scene, (mesh) => {
+      if (!mesh.isMesh) return;
+      const entry = { beforeRender: mesh.onBeforeRender, used: new Set() };
+      meshes.set(mesh, entry);
+      mesh.onBeforeRender = function (...args) {
+        entry.beforeRender.apply(this, args);
+        const material = args[4];
+        if (!material?.isMeshStandardMaterial || entry.used.has(material)) return;
+        entry.used.add(material);
+        acquire(material).count++;
+      };
+    }, release);
+  }, [scene, uniforms]);
   return null;
 }

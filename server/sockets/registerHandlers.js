@@ -1,4 +1,5 @@
 import { EVENTS } from "../../shared/protocol.js";
+import { PresenceLimiter } from "../services/presenceLimiter.js";
 import { roomChannel } from "../services/roomService.js";
 import {
   RequestError,
@@ -8,6 +9,7 @@ import {
 } from "../validation.js";
 
 export function registerHandlers(io, socket, rooms, placements) {
+  const presenceLimiter = new PresenceLimiter();
   const acknowledge = (ack, response) => {
     if (typeof ack === "function") ack(response);
   };
@@ -61,6 +63,7 @@ export function registerHandlers(io, socket, rooms, placements) {
 
   socket.on(EVENTS.PRESENCE_UPDATE, (payload, ack) => {
     try {
+      presenceLimiter.consume();
       const changes = validatePresence(payload);
       const visitor = rooms.update(socket, changes);
       io.to(roomChannel(socket.data.roomId)).emit(EVENTS.PRESENCE_UPDATE, {

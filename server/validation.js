@@ -1,4 +1,4 @@
-import { AVATAR_TYPES, LIMITS, POOL_SIDES, ZONES } from "../shared/protocol.js";
+import { ACTIVITIES, AVATAR_TYPES, LIMITS, POOL_SIDES, ZONES } from "../shared/protocol.js";
 import { FLOWER_ANCHORS, NOTE_ANCHORS } from "../shared/memorialLayout.js";
 
 export class RequestError extends Error {
@@ -37,7 +37,7 @@ function choice(value, choices, label) {
 }
 
 export function validateJoin(payload) {
-  validateFields(payload, ["roomId", "visitorId", "username", "avatarType", "currentZone"]);
+  validateFields(payload, ["roomId", "visitorId", "username", "avatarType", "currentZone", "activity"]);
   if (
     payload.visitorId !== undefined &&
     (typeof payload.visitorId !== "string" ||
@@ -52,20 +52,25 @@ export function validateJoin(payload) {
       "INVALID_ROOM",
       `Room ID must contain 1–${LIMITS.roomId} letters, numbers, underscores or hyphens.`,
     );
+  const currentZone = choice(payload.currentZone ?? "overview", ZONES, "zone");
+  const activity = choice(payload.activity ?? "idle", ACTIVITIES, "activity");
+  validateActivityZone(activity, currentZone);
   return {
     roomId: payload.roomId,
     visitorId: payload.visitorId,
     username: text(payload.username, LIMITS.username, "Username"),
     avatarType: choice(payload.avatarType, AVATAR_TYPES, "avatar type"),
-    currentZone: choice(payload.currentZone ?? "overview", ZONES, "zone"),
+    currentZone,
+    activity,
   };
 }
 
 export function validatePresence(payload) {
-  validateFields(payload, ["currentZone", "username", "avatarType"]);
+  validateFields(payload, ["currentZone", "username", "avatarType", "activity"]);
   if (!Object.keys(payload).length)
     throw new RequestError("INVALID_PAYLOAD", "Provide a zone or profile update.");
   const changes = {};
+  if (payload.activity !== undefined) changes.activity = choice(payload.activity, ACTIVITIES, "activity");
   if (payload.currentZone !== undefined)
     changes.currentZone = choice(payload.currentZone, ZONES, "zone");
   if (payload.username !== undefined)
@@ -80,7 +85,7 @@ export function validateContribution(kind, payload) {
     payload,
     kind === "note"
       ? ["requestId", "anchorId", "text"]
-      : ["requestId", "anchorId", "poolSide"],
+      : ["requestId", "anchorId", "poolSide", "roomId"],
   );
   if (
     typeof payload.requestId !== "string" ||
@@ -95,7 +100,16 @@ export function validateContribution(kind, payload) {
     choice(payload.anchorId, NOTE_ANCHORS, "note anchor");
     return { requestId: payload.requestId, anchorId: payload.anchorId, text: noteText };
   }
+  if (payload.roomId !== undefined &&
+    (typeof payload.roomId !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(payload.roomId)))
+    throw new RequestError("INVALID_ROOM", "Unknown memorial room.");
   const poolSide = choice(payload.poolSide, POOL_SIDES, "pool side");
   choice(payload.anchorId, FLOWER_ANCHORS[poolSide], "flower anchor for this pool side");
   return { requestId: payload.requestId, anchorId: payload.anchorId, poolSide };
+}
+
+export function validateActivityZone(activity, zone) {
+  if ((["writing-note", "placing-note", "reading-note"].includes(activity) && zone !== "tree") ||
+    (activity === "placing-flower" && zone !== "north"))
+    throw new RequestError("INVALID_ACTIVITY", "This activity does not belong to this memorial zone.");
 }

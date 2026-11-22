@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame, useLoader } from "@react-three/fiber";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { useFrame } from "@react-three/fiber";
+import { useModel } from "./scene/assets.js";
 import * as THREE from "three";
 
 export default function TexturedTree({
@@ -20,10 +20,7 @@ export default function TexturedTree({
       : seed % 2
         ? "jabami-tree-v1"
         : "jabami-tree-v4";
-  const gltf = useLoader(
-    GLTFLoader,
-    import.meta.env.BASE_URL + "models/" + asset + ".glb",
-  );
+  const gltf = useModel(asset);
   const group = useRef();
   const model = useMemo(() => {
     // shared geometry, separate ghost materials
@@ -46,7 +43,7 @@ export default function TexturedTree({
         const foliage = bush || /leave|leaf/i.test(source.name);
         const coolCanopy = foliage && !bush && !survivor;
         if (!survivor) {
-          node.geometry.computeBoundingBox();
+          if (!node.geometry.boundingBox) node.geometry.computeBoundingBox();
           const bounds = node.geometry.boundingBox;
           material.color.set("#ffffff");
           material.onBeforeCompile = (shader) => {
@@ -166,23 +163,12 @@ export default function TexturedTree({
     [model],
   );
   useFrame(({ clock }) => {
-    if (ghost)
-      model.traverse((node) => {
-        if (!node.isMesh) return;
-        const opacity = 0.24;
-        (Array.isArray(node.material)
-          ? node.material
-          : [node.material]
-        ).forEach((material) => {
-          material.opacity = opacity;
-        });
-      });
     if (group.current)
       group.current.rotation.z =
         Math.sin(clock.elapsedTime * 0.5 + seed) * 0.007;
   });
   return (
-    <group position={position} scale={scale} rotation={[0, seed * 2.4, 0]} userData={{ cameraObstacle: true }}>
+    <group position={position} scale={scale} rotation={[0, seed * 2.4, 0]} userData={{ cameraObstacle: true, survivorTree: survivor, treeTrunk: !bush }}>
       <group ref={group}>
         <primitive object={model} />
       </group>

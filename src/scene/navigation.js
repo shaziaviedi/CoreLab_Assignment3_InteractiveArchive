@@ -4,7 +4,7 @@ import { POOL_SIDES } from "../../shared/protocol.js";
 import { SURVIVOR_TREE } from "./memorialLayout.js";
 
 export const sideIndex = (step) => ((step % 4) + 4) % 4;
-export const TREE_ORBIT_LIMIT = 0.32;
+export const TREE_ORBIT_RADIUS = 3.2;
 export const ease = (t) => t * t * (3 - 2 * t);
 
 export function measurePoolLayout(model) {
@@ -18,20 +18,31 @@ export function measurePoolLayout(model) {
   surfaces.forEach((mesh) => bounds.union(new THREE.Box3().setFromObject(mesh)));
   const center = bounds.getCenter(new THREE.Vector3());
   const ray = new THREE.Raycaster();
+  const normalMatrix = new THREE.Matrix3();
+  const tangents = { north: [1, 0, 0], east: [0, 0, 1], south: [-1, 0, 0], west: [0, 0, -1] };
   const anchors = [];
   POOL_SIDES.forEach((side) => {
     FLOWER_ANCHORS[side].forEach((id, index) => {
-      // Leave the chamfered corners clear; sample just inside the outer edge.
+      // Reserve the inner panel for names. The entire narrow rose footprint
+      // lies parallel to the edge in the narrow outer lip, clear of corners.
       const t = 0.1 + (index / 11) * 0.8;
-      const x = side === "east" ? bounds.max.x - 0.12 :
-        side === "west" ? bounds.min.x + 0.12 :
+      const x = side === "east" ? bounds.max.x - 0.075 :
+        side === "west" ? bounds.min.x + 0.075 :
           THREE.MathUtils.lerp(bounds.min.x, bounds.max.x, t);
-      const z = side === "north" ? bounds.min.z + 0.12 :
-        side === "south" ? bounds.max.z - 0.12 :
+      const z = side === "north" ? bounds.min.z + 0.075 :
+        side === "south" ? bounds.max.z - 0.075 :
           THREE.MathUtils.lerp(bounds.min.z, bounds.max.z, t);
       ray.set(new THREE.Vector3(x, bounds.max.y + 1, z), new THREE.Vector3(0, -1, 0));
       const hit = ray.intersectObjects(surfaces, false)[0];
-      if (hit) anchors.push({ id, poolSide: side, position: hit.point.toArray() });
+      if (hit) {
+        const normal = hit.face.normal.clone().applyNormalMatrix(normalMatrix.getNormalMatrix(hit.object.matrixWorld));
+        if (normal.y < 0) normal.negate();
+        const tangent = new THREE.Vector3(...tangents[side]);
+        tangent.addScaledVector(normal, -tangent.dot(normal)).normalize();
+        const across = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+        const rotation = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangent, normal, across));
+        anchors.push({ id, poolSide: side, position: hit.point.toArray(), quaternion: rotation.toArray() });
+      }
     });
   });
   return { bounds, center, anchors };
@@ -59,13 +70,31 @@ export function poolCameraTarget(layout, step, out = new THREE.Vector3()) {
   return out;
 }
 
-export function treeCameraPosition(angle, out = new THREE.Vector3()) {
-  const bearing = -0.5 + THREE.MathUtils.clamp(angle, -TREE_ORBIT_LIMIT, TREE_ORBIT_LIMIT);
+export function treeCameraPosition(angle, out = new THREE.Vector3(), radius = TREE_ORBIT_RADIUS) {
+  const bearing = -0.5 + angle;
+  const distance = THREE.MathUtils.clamp(radius, 2.6, 3.5);
   return out.set(
-    SURVIVOR_TREE[0] + Math.sin(bearing) * 7,
-    3.4,
-    SURVIVOR_TREE[2] + Math.cos(bearing) * 7,
+    SURVIVOR_TREE[0] + Math.sin(bearing) * distance,
+    1.7,
+    SURVIVOR_TREE[2] + Math.cos(bearing) * distance,
   );
+}
+
+const treeRay = new THREE.Ray();
+const treeHit = new THREE.Vector3();
+
+export function clearTreeOrbit(position, obstacles) {
+  treeRay.origin.set(SURVIVOR_TREE[0], position.y, SURVIVOR_TREE[2]);
+  const distance = position.distanceTo(treeRay.origin);
+  treeRay.direction.copy(position).sub(treeRay.origin).normalize();
+  let radius = distance;
+  for (const box of obstacles) {
+    // The orbit's minimum radius already protects the Survivor Tree trunk.
+    if (box.containsPoint(treeRay.origin)) continue;
+    if (treeRay.intersectBox(box, treeHit))
+      radius = Math.min(radius, Math.max(1.9, treeHit.distanceTo(treeRay.origin) - 0.25));
+  }
+  return position.copy(treeRay.origin).addScaledVector(treeRay.direction, radius);
 }
 
 export function safeCameraPosition(position, obstacles) {

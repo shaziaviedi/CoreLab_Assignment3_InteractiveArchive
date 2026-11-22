@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
-import Experience from "./Experience.jsx";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
+import LoadingScreen from "./scene/LoadingScreen.jsx";
 import CollaborationProvider, { useCollaboration } from "./collaboration/CollaborationProvider.jsx";
 import VisitorEntry from "./collaboration/components/VisitorEntry.jsx";
 import CollaborationStatus from "./collaboration/components/CollaborationStatus.jsx";
+
+const Experience = lazy(() => import("./Experience.jsx"));
 
 export default function App() {
   return (
@@ -16,7 +18,12 @@ function MemorialApp() {
   const { identity, updateIdentity } = useCollaboration();
   const [editingProfile, setEditingProfile] = useState(false);
   const [phase, setPhase] = useState("landing");
+  const [sceneReady, setSceneReady] = useState(false);
+  const [entryRequested, setEntryRequested] = useState(false);
   const sceneRef = useRef(null);
+  useEffect(() => {
+    if (entryRequested && sceneReady) setPhase("entering");
+  }, [entryRequested, sceneReady]);
 
   useEffect(() => {
     if (phase !== "entering") return;
@@ -42,7 +49,9 @@ function MemorialApp() {
         inert={phase !== "entered" || editingProfile ? "" : undefined}
         aria-hidden={phase !== "entered" || editingProfile}
       >
-        <Experience preview={phase !== "entered"} interactionBlocked={editingProfile} />
+        <Suspense fallback={<LoadingScreen />}>
+          <Experience preview={phase !== "entered"} interactionBlocked={editingProfile} onSceneReady={setSceneReady} />
+        </Suspense>
       </div>
       {(!identity || editingProfile) && (
         <VisitorEntry
@@ -51,7 +60,7 @@ function MemorialApp() {
           onSave={(profile) => {
             if (!updateIdentity(profile)) return false;
             if (editingProfile) setEditingProfile(false);
-            else setPhase("entering");
+            else setEntryRequested(true);
             return true;
           }}
         />
@@ -66,10 +75,10 @@ function MemorialApp() {
             </p>
             <button
               className="landing-enter"
-              disabled={phase === "entering"}
-              onClick={() => setPhase("entering")}
+              disabled={phase === "entering" || (entryRequested && !sceneReady)}
+              onClick={() => setEntryRequested(true)}
             >
-              Enter the experience <span aria-hidden="true">→</span>
+              {entryRequested && !sceneReady ? "Preparing the memorial" : "Enter the experience"} <span aria-hidden="true">→</span>
             </button>
           </div>
         </main>

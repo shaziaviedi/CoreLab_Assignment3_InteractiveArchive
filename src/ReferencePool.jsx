@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
-import { useFrame, useLoader } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import WaterfallParticles from "./WaterfallParticles.jsx";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { useModel } from "./scene/assets.js";
 import { Color } from "three";
 import { POOL_SCALE } from "./scene/memorialLayout.js";
 import { measurePoolLayout } from "./scene/navigation.js";
@@ -15,10 +15,7 @@ export default function ReferencePool({
   blend,
   onLayout,
 }) {
-  const gltf = useLoader(
-    GLTFLoader,
-    import.meta.env.BASE_URL + "models/reference-pool.glb",
-  );
+  const gltf = useModel("reference-pool");
   const time = useMemo(() => ({ value: 0 }), []);
   const reflection = useMemo(
     () => ({
@@ -139,17 +136,6 @@ export default function ReferencePool({
       reflection.x.value =
         0.5 + Math.tanh((lightPosition.x - at[0]) / height) * 0.3;
     }
-    if (!active)
-      model.traverse((node) => {
-        if (!node.isMesh || !node.visible) return;
-        const opacity = 0.24;
-        (Array.isArray(node.material)
-          ? node.material
-          : [node.material]
-        ).forEach((material) => {
-          material.opacity = opacity;
-        });
-      });
   });
   useEffect(() => {
     if (onLayout) onLayout(measurePoolLayout(model));

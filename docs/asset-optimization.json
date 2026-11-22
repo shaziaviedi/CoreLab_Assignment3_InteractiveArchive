@@ -1,0 +1,78 @@
+{
+  "method": "Lossless Meshopt; full-resolution lossless WebP for color PNGs; unused runtime-discarded color maps removed",
+  "originals": "Original GLBs remain unchanged in public/models; runtime loads only public/models/optimized",
+  "assets": [
+    {
+      "name": "reference-pool",
+      "before": 3532192,
+      "after": 60964
+    },
+    {
+      "name": "reference-museum",
+      "before": 902164,
+      "after": 430752
+    },
+    {
+      "name": "survivor-sakura",
+      "before": 5113220,
+      "after": 3234932
+    },
+    {
+      "name": "jabami-bush",
+      "before": 282052,
+      "after": 195988
+    },
+    {
+      "name": "jabami-tree-v1",
+      "before": 817540,
+      "after": 646460
+    },
+    {
+      "name": "jabami-tree-v4",
+      "before": 515376,
+      "after": 445084
+    },
+    {
+      "name": "oculus",
+      "before": 11407032,
+      "after": 5414124
+    },
+    {
+      "name": "city-lowpoly",
+      "before": 641988,
+      "after": 436528
+    },
+    {
+      "name": "city-newyork",
+      "before": 885148,
+      "after": 729908
+    },
+    {
+      "name": "one-world-trade-center",
+      "before": 1441856,
+      "after": 764988
+    },
+    {
+      "name": "male-idle",
+      "before": 520216,
+      "after": 266248
+    },
+    {
+      "name": "female-idle",
+      "before": 452556,
+      "after": 235396
+    },
+    {
+      "name": "male-walk",
+      "before": 310696,
+      "after": 174968
+    },
+    {
+      "name": "female-walk",
+      "before": 321444,
+      "after": 182952
+    }
+  ],
+  "before": 27143480,
+  "after": 13219292
+}

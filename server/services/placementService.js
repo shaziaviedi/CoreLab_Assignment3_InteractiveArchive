@@ -34,6 +34,9 @@ export class PlacementService {
     let input;
     try {
       input = validateContribution(kind, payload);
+      // A client may name its room, but cannot place into a room it has not joined.
+      if (kind === "flower" && payload.roomId !== undefined && payload.roomId !== socket.data.roomId)
+        throw new RequestError("ROOM_MISMATCH", "Rejoin this room before placing a flower.");
     } catch (error) {
       this.consumeAttempt(socket.id);
       throw error;

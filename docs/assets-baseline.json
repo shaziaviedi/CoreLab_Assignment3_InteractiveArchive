@@ -1,0 +1,373 @@
+{
+  "total": 32370536,
+  "rows": [
+    {
+      "name": "city-lowpoly.glb",
+      "bytes": 641988,
+      "vertices": 11020,
+      "triangles": 6120,
+      "materials": 1,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/webp",
+          "bytes": 42348
+        },
+        {
+          "type": "image/webp",
+          "bytes": 35638
+        },
+        {
+          "type": "image/webp",
+          "bytes": 120580
+        }
+      ]
+    },
+    {
+      "name": "city-newyork.glb",
+      "bytes": 885148,
+      "vertices": 9786,
+      "triangles": 5142,
+      "materials": 21,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/webp",
+          "bytes": 29534
+        },
+        {
+          "type": "image/webp",
+          "bytes": 68994
+        },
+        {
+          "type": "image/webp",
+          "bytes": 36412
+        },
+        {
+          "type": "image/webp",
+          "bytes": 22990
+        },
+        {
+          "type": "image/webp",
+          "bytes": 66782
+        },
+        {
+          "type": "image/webp",
+          "bytes": 29976
+        },
+        {
+          "type": "image/webp",
+          "bytes": 28698
+        },
+        {
+          "type": "image/webp",
+          "bytes": 28384
+        },
+        {
+          "type": "image/webp",
+          "bytes": 44352
+        },
+        {
+          "type": "image/webp",
+          "bytes": 52762
+        },
+        {
+          "type": "image/webp",
+          "bytes": 6338
+        },
+        {
+          "type": "image/webp",
+          "bytes": 40676
+        },
+        {
+          "type": "image/webp",
+          "bytes": 17248
+        },
+        {
+          "type": "image/webp",
+          "bytes": 41314
+        },
+        {
+          "type": "image/webp",
+          "bytes": 21338
+        }
+      ]
+    },
+    {
+      "name": "female-idle.glb",
+      "bytes": 452556,
+      "vertices": 3330,
+      "triangles": 1622,
+      "materials": 1,
+      "animations": 1,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 35871
+        }
+      ]
+    },
+    {
+      "name": "female-walk.glb",
+      "bytes": 321444,
+      "vertices": 3330,
+      "triangles": 1622,
+      "materials": 1,
+      "animations": 1,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 35871
+        }
+      ]
+    },
+    {
+      "name": "jabami-bush.glb",
+      "bytes": 282052,
+      "vertices": 2608,
+      "triangles": 1304,
+      "materials": 3,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 86403
+        },
+        {
+          "type": "image/png",
+          "bytes": 43295
+        },
+        {
+          "type": "image/png",
+          "bytes": 43270
+        }
+      ]
+    },
+    {
+      "name": "jabami-tree-v1.glb",
+      "bytes": 817540,
+      "vertices": 5509,
+      "triangles": 4483,
+      "materials": 4,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 364205
+        },
+        {
+          "type": "image/png",
+          "bytes": 86403
+        },
+        {
+          "type": "image/png",
+          "bytes": 86403
+        },
+        {
+          "type": "image/png",
+          "bytes": 43295
+        }
+      ]
+    },
+    {
+      "name": "jabami-tree-v4.glb",
+      "bytes": 515376,
+      "vertices": 1508,
+      "triangles": 945,
+      "materials": 3,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 364205
+        },
+        {
+          "type": "image/png",
+          "bytes": 43270
+        },
+        {
+          "type": "image/png",
+          "bytes": 43317
+        }
+      ]
+    },
+    {
+      "name": "male-idle.glb",
+      "bytes": 520216,
+      "vertices": 3176,
+      "triangles": 1552,
+      "materials": 1,
+      "animations": 1,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 35871
+        }
+      ]
+    },
+    {
+      "name": "male-walk.glb",
+      "bytes": 310696,
+      "vertices": 3176,
+      "triangles": 1552,
+      "materials": 1,
+      "animations": 1,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 35871
+        }
+      ]
+    },
+    {
+      "name": "oculus.glb",
+      "bytes": 11407032,
+      "vertices": 300927,
+      "triangles": 362250,
+      "materials": 7,
+      "animations": 0,
+      "images": []
+    },
+    {
+      "name": "one-world-trade-center.glb",
+      "bytes": 1441856,
+      "vertices": 42540,
+      "triangles": 34499,
+      "materials": 7,
+      "animations": 0,
+      "images": []
+    },
+    {
+      "name": "plaza-tree.glb",
+      "bytes": 5227056,
+      "vertices": 129796,
+      "triangles": 74125,
+      "materials": 3,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/webp",
+          "bytes": 81856
+        },
+        {
+          "type": "image/webp",
+          "bytes": 41470
+        },
+        {
+          "type": "image/webp",
+          "bytes": 29196
+        },
+        {
+          "type": "image/webp",
+          "bytes": 16208
+        },
+        {
+          "type": "image/webp",
+          "bytes": 9104
+        },
+        {
+          "type": "image/webp",
+          "bytes": 26626
+        },
+        {
+          "type": "image/webp",
+          "bytes": 60394
+        },
+        {
+          "type": "image/webp",
+          "bytes": 42100
+        },
+        {
+          "type": "image/webp",
+          "bytes": 16294
+        }
+      ]
+    },
+    {
+      "name": "reference-museum.glb",
+      "bytes": 902164,
+      "vertices": 32457,
+      "triangles": 10819,
+      "materials": 25,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/webp",
+          "bytes": 950
+        },
+        {
+          "type": "image/webp",
+          "bytes": 1418
+        },
+        {
+          "type": "image/webp",
+          "bytes": 14034
+        },
+        {
+          "type": "image/webp",
+          "bytes": 1364
+        },
+        {
+          "type": "image/webp",
+          "bytes": 13248
+        },
+        {
+          "type": "image/webp",
+          "bytes": 24960
+        },
+        {
+          "type": "image/webp",
+          "bytes": 2292
+        }
+      ]
+    },
+    {
+      "name": "reference-pool.glb",
+      "bytes": 3532192,
+      "vertices": 879,
+      "triangles": 293,
+      "materials": 5,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 3194832
+        },
+        {
+          "type": "image/png",
+          "bytes": 12856
+        },
+        {
+          "type": "image/png",
+          "bytes": 216868
+        },
+        {
+          "type": "image/png",
+          "bytes": 36068
+        },
+        {
+          "type": "image/png",
+          "bytes": 13376
+        }
+      ]
+    },
+    {
+      "name": "survivor-sakura.glb",
+      "bytes": 5113220,
+      "vertices": 7748,
+      "triangles": 7007,
+      "materials": 2,
+      "animations": 0,
+      "images": [
+        {
+          "type": "image/png",
+          "bytes": 3896127
+        },
+        {
+          "type": "image/png",
+          "bytes": 694430
+        }
+      ]
+    }
+  ]
+}
