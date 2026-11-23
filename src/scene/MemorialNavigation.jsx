@@ -1,10 +1,10 @@
 import React from "react";
 import { POOL_VIEW_SIDES, sideIndex } from "./navigation.js";
 
-export default function MemorialNavigation({ zone, step, transitioning, onStep, onBack }) {
+export default function MemorialNavigation({ zone, step, transitioning, onStep, onBack, onCompose, composeDisabled }) {
   const index = sideIndex(step);
   return (
-    <section className="memorial-navigation" aria-label={`${zone === "tree" ? "Survivor Tree" : "North Pool"} interaction view`}>
+    <section className={`memorial-navigation ${zone === "tree" ? "tree-navigation" : "pool-navigation"}`} aria-label={`${zone === "tree" ? "Survivor Tree" : "North Pool"} interaction view`}>
       <div className="memorial-view-title">
         <span>{zone === "tree" ? "Survivor Tree" : "North Pool"}</span>
       </div>
@@ -17,6 +17,7 @@ export default function MemorialNavigation({ zone, step, transitioning, onStep, 
       )}
       <div className="memorial-view-controls">
         <button className="viewer-back" onClick={onBack}>← RETURN TO MAP</button>
+        {onCompose && <button className="viewer-back" onClick={onCompose} disabled={composeDisabled}>LEAVE A MESSAGE</button>}
       </div>
     </section>
   );

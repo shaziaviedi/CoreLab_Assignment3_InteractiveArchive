@@ -5,6 +5,8 @@ import { ROSE_PALETTE, roseAppearance } from "./roseAppearance.js";
 export default function FlowerOverlay({ layout, side, flowers, controls, active, status, targets, tooltip }) {
   const occupied = useMemo(() => new Map(flowers.map((flower) => [flower.anchorId, flower])), [flowers]);
   const selected = occupied.get(controls.info?.anchorId);
+  const message = controls.error || (controls.pending ? "Leaving your flower…" : status !== "connected"
+    ? "Reconnect to leave a flower." : controls.feedback?.text ?? "Hover and click to leave a rose");
   useEffect(() => {
     // When a focused free anchor becomes occupied, expose its new attribution
     // without requiring the keyboard visitor to leave and refocus the flower.
@@ -51,8 +53,7 @@ export default function FlowerOverlay({ layout, side, flowers, controls, active,
       )}
       {active && (
         <div className="flower-placement-status" role="status" aria-live="polite">
-          {controls.error || (controls.pending ? "Leaving your flower…" : status !== "connected"
-            ? "Reconnect to leave a flower." : "Hover a quiet point on the parapet · click to leave a rose")}
+          <span key={message} className="flower-status-copy">{message}</span>
         </div>
       )}
     </div>

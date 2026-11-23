@@ -20,20 +20,40 @@ export function createPaperTexture(text) {
   context.fillStyle = fold;
   context.fillRect(0, 306, 512, 20);
   context.fillStyle = "#514637";
-  context.font = '30px "Segoe Print", "Bradley Hand", cursive';
   context.textBaseline = "top";
-  let line = "", y = 72;
-  for (const character of [...text]) {
-    if (character === "\n" || context.measureText(line + character).width > 422) {
-      context.fillText(line, 45, y);
-      y += 43;
-      line = character === "\n" ? "" : character;
-    } else line += character;
-    if (y > 540) break;
-  }
-  if (y <= 540) context.fillText(line, 45, y);
+  const layout = layoutPaperText(context, text);
+  layout.lines.forEach((line, index) => context.fillText(line, 45, 68 + index * layout.lineHeight));
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 4;
   return texture;
+}
+
+// Fit the complete accepted message on the physical paper; never silently cut
+// off its last lines. Extremely fragmented line breaks reflow like normal text.
+export function layoutPaperText(context, text) {
+  function wrap(value) {
+    const lines = []; let line = "";
+    for (const character of [...value]) {
+      if (character === "\n") {
+        lines.push(line);
+        line = "";
+      } else if (context.measureText(line + character).width > 422) {
+        // Prefer whole words; long unbroken input still wraps without losing text.
+        const split = line.lastIndexOf(" ") + 1;
+        lines.push(split ? line.slice(0, split) : line);
+        line = (split ? line.slice(split) : "") + character;
+      } else line += character;
+    }
+    lines.push(line);
+    return lines;
+  }
+  for (const value of [text, text.replace(/\s*\n\s*/g, " ")]) {
+    for (let font = 30; font >= 16; font -= 2) {
+      context.font = `${font}px "Segoe Print", "Bradley Hand", cursive`;
+      const lines = wrap(value), lineHeight = font * 1.43;
+      if (lines.length * lineHeight <= 490) return { lines, lineHeight };
+    }
+  }
+  return { lines: wrap(text.replace(/\s+/g, " ")), lineHeight: 22.88 };
 }

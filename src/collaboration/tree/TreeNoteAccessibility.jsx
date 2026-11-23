@@ -1,24 +1,41 @@
 import React, { useMemo } from "react";
 import { KEYBOARD_NOTE_ANCHORS, noteAnchor } from "./treeNoteLayout.js";
 import { notesOverlap } from "../../../shared/fenceLayout.js";
+import { formatFlowerTime } from "../flowers/flowerProjection.js";
 
-// Read every actual note; offer a coarse focus subset of the finer pointer grid.
-export default function TreeNoteAccessibility({ notes, controls, active, targets, hiddenNoteIds }) {
+// Projected counterparts of the actual tags, plus a coarse keyboard placement grid.
+export default function TreeNoteAccessibility({ notes, controls, active, targets, hiddenNoteIds, hint, tooltip }) {
   const entries = useMemo(() => [
     ...notes.map((note) => ({ anchor: noteAnchor(note), note })),
     ...(controls.stage === "place" ? KEYBOARD_NOTE_ANCHORS.filter((anchor) => !notes.some((note) => notesOverlap(note, anchor))).map((anchor) => ({ anchor })) : []),
   ].filter(({ anchor }) => anchor), [notes, controls.stage]);
+  const indicated = controls.selected ?? notes.find((note) => note.id === controls.info?.id);
   if (!active) return null;
   return <div className="tree-note-access">
     {entries.map(({ anchor, note }, index) => <button key={anchor.id} hidden className="tree-note-focus-target"
       ref={(element) => { if (element) targets.current.set(anchor.id, element); else targets.current.delete(anchor.id); }}
       aria-label={note ? `${hiddenNoteIds.has(note.id) ? "Read hidden message" : "Read message"} at point ${index + 1}` : `Attach your message at point ${index + 1}`}
+      aria-describedby={note?.id === indicated?.id ? "note-contributor" : undefined}
       aria-disabled={controls.pending || (!note && (controls.status !== "connected" || controls.uncertain))}
-      onFocus={() => controls.focusAnchor(anchor.id)} onBlur={() => controls.focusAnchor(null)}
+      onFocus={() => { controls.focusAnchor(anchor.id); if (note) controls.showInfo?.(note.id, "focus"); }}
+      onBlur={() => { controls.focusAnchor(null); if (note) controls.hideInfo?.(note.id, "focus"); }}
       onClick={() => {
         if (controls.pending) return;
         if (note) controls.read(note.id);
         else if (!controls.uncertain && controls.status === "connected") controls.place(anchor.id);
-      }}><span>{note ? "Read message" : "Attach message here"}</span></button>)}
+      }}><span>{note ? "View Message" : "Attach message here"}</span></button>)}
+    {indicated && <>
+      {controls.stage !== "read" && <button ref={hint} hidden className="tree-view-hint"
+        onPointerEnter={() => controls.showInfo(indicated.id, "hint")}
+        onPointerLeave={() => controls.hideInfo(indicated.id, "hint")}
+        onClick={() => controls.read(indicated.id)}>
+        <img src={`${import.meta.env?.BASE_URL ?? "/"}svg/magnify.svg`} alt="" /><span>View Message</span>
+      </button>}
+      <div ref={tooltip} id="note-contributor" className="flower-tooltip" role="tooltip" hidden>
+        <div className="flower-tooltip-content"><span>Placed by: <b>{indicated.authorName}</b></span>
+          <time dateTime={indicated.createdAt}>{formatFlowerTime(indicated.createdAt)}</time>
+        </div>
+      </div>
+    </>}
   </div>;
 }

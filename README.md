@@ -71,6 +71,10 @@ profile setup before any interactive controls are enabled. Visitors choose a use
 the existing male or female character model. Their name, avatar and stable anonymous visitor ID are
 saved in localStorage; blocked storage falls back to the current session. The portrait beside Reset allows later edits without recreating the memorial.
 No username is permanently displayed beside it; connection status/count sit below it.
+This control group is visible only on the main map, without resetting identity in
+photography, tree or pool interactions. The narrower visitor list shows cached
+head portraits, usernames and one short location/activity label; it omits avatar
+type text and the redundant room heading.
 
 `?room=your-room` joins that room without login. No query joins `memorial`. Room IDs
 allow 1–64 ASCII letters, numbers, underscores or hyphens and are case-sensitive.
@@ -97,10 +101,11 @@ Historical contributions are not announced when joining/reconnecting.
 ## Survivor Tree messages
 
 Place the Tree fragment and choose **Leave a message** on the map. This directly
-opens the close-up orbit and composer. Cancel writing to stay near the tree;
-hover the fence for the glowing magnifier and **View Messages**, or use its
-keyboard-accessible equivalent. Browsing, reading and placement share the same
-lower orbit and retain its angle. The photography camera icon keeps its original
+starts the close-up camera transition; the composer appears only after the
+camera signals arrival. **CANCEL** and **SUBMIT** sit at the bottom-right. SUBMIT
+retains the local draft and enters placement; only the final accepted fence click
+creates a contribution. Cancel writing to stay near the tree. The bottom control
+group keeps **← RETURN TO MAP** beside **LEAVE A MESSAGE**. The photography camera icon keeps its original
 wide composition and separate shutter/archive controls.
 
 Write up to 180 Unicode code points, preview the paper tag, then move over the
@@ -114,16 +119,24 @@ neighbors and wraparound at the cylinder seam. Legacy tree-01–tree-24 records
 still resolve to their original attachment heights/angles.
 
 The reduced fence is centered on the visible lower bark rather than asymmetric
-canopy bounds. Shared layout version is 3; deploy frontend and backend together.
+canopy bounds. Shared layout version is 4; deploy frontend and backend together.
 Observation actors retain shoulder clearance. **← RETURN TO MAP** uses the existing
 photography return styling. A pending request blocks duplicates; rejected or
 uncertain submissions preserve the draft and original retry identity.
 
-Click/focus an existing tag to read its full text, author, chosen avatar and local
-date/time. Text is rendered literally, never as HTML. The reader offers reversible
-**Hide this message on this browser**. Hidden IDs are stored locally per room;
-neutral paper remains and its anchor stays occupied. This is local hiding, not a
-moderator report or removal for other visitors.
+Hover a tag to see contributor/time metadata and a plain glowing **View Message**
+indicator projected beside that actual note. Clicking the note/indicator moves the
+same camera rig close enough to read the full message on the physical paper.
+There is no separate visual message-details card. Keyboard focus/tap provide the
+same reading frame and metadata; screen readers receive the full original text.
+**BACK TO MESSAGES** restores the saved orbit. **HIDE MESSAGE** remains reversible
+and local to this browser/room; a neutral paper placeholder still reserves its spot.
+
+Fence picking refreshes the active camera matrices and raycasts the current
+surface using the canvas's current client rectangle. Hover resumes on pointer
+release after orbiting, while the drag latch still suppresses its trailing click.
+Paper transforms include a small outward normal offset to clear the metal posts;
+the neutral grey lattice retains its reduced dimensions and materials.
 
 ## North Pool flowers
 
@@ -149,6 +162,10 @@ label follows the flower's projected position, does not capture pointer hits,
 and formats the server's ISO timestamp in the viewer's local timezone using
 `Intl.DateTimeFormat`. A touch label stays until the next gesture. Failed requests
 clear the preview and allow another anchor; pending requests block duplicate clicks.
+One status area says **Hover and click to leave a rose**, switches to
+**Your flower has been placed** only after acknowledgement, and returns after
+three seconds. Errors use the same area. There is no separate own-flower success
+notification card. The return control sits higher above the safe-area edge.
 
 ## Shared and local state
 
@@ -185,7 +202,8 @@ Requests use acknowledgements: `{ ok: true, ... }` or
   The reply contains visitor and state. `room:state` supplies
   `{ roomId, layoutVersion, revision, visitors, notes, flowers }`.
 - `presence:update`: profile/zone/activity changes; broadcasts `{ roomId, visitor }`.
-  Known zones are overview/tree/north/street. Note activity requires tree; flower
+  Known zones are overview/tree/north/street. Photography uses the short-lived
+  `photographing` activity. Note activity requires tree; flower
   activity requires north. Profile edits keep socket identity and join time.
 - `presence:leave`: explicit leave, room switch or disconnect; broadcasts
   `{ roomId, socketId, visitorId }`. A socket belongs to one room.
@@ -269,8 +287,10 @@ See [Vite's Pages guide](https://vite.dev/guide/static-deploy#github-pages).
 
 ## Verification and deployment status
 
-See [the collaborative interaction refinements](docs/interaction-refinements.md)
-for the latest placement, camera, color and verification changes. The
+See [the profile and camera review](docs/profile-camera-refinements.md) for the
+latest pointer bug diagnosis, reading behavior, UI changes and verification.
+The [interaction refinements](docs/interaction-refinements.md) record the
+preceding placement and rose-color work. The
 [connectivity revisions](docs/connectivity-ui-revisions.md) record the preceding
 connection diagnosis and startup/deployment instructions.
 The earlier integration report records the state before these revisions.

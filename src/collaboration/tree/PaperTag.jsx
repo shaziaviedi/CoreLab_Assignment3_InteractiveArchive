@@ -26,7 +26,8 @@ export default function PaperTag({ text, seed = 0, preview = false, ...events })
     if (!pivot.current) return;
     // Attach at the top, then settle; the anchor itself never moves with the camera.
     const remaining = reduced || preview ? 0 : (1 - arrival.current) ** 2;
-    pivot.current.rotation.x = reduced ? 0 : Math.sin(clock.elapsedTime * 0.7 + seed) * 0.035 + remaining * 0.32;
+    // Open outward while settling, rather than swinging through the fence posts.
+    pivot.current.rotation.x = reduced ? 0 : Math.sin(clock.elapsedTime * 0.7 + seed) * 0.035 - remaining * 0.16;
     pivot.current.rotation.z = reduced ? 0 : Math.sin(clock.elapsedTime * 0.85 + seed * 1.7) * 0.018;
     pivot.current.position.y = remaining * 0.06;
   });

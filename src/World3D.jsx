@@ -1153,6 +1153,7 @@ export default React.memo(function World3D({
   guideMenuRef,
   mode,
   treeClose,
+  treeFocus,
   hasSelectedFragment,
   poolStep,
   poolLayout,
@@ -1251,6 +1252,7 @@ export default React.memo(function World3D({
         cameraZone={cameraZone}
         mode={mode}
         treeClose={treeClose}
+        treeFocus={treeFocus}
         poolLayout={poolLayout}
         poolStep={poolStep}
         gesture={gesture}

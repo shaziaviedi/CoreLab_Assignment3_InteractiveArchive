@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { ACTIVITY_LABELS, ZONE_LABELS, visitorActivity } from "../presence/presentation.js";
 import { useCollaboration } from "../CollaborationProvider.jsx";
+const AvatarPortrait = lazy(() => import("./AvatarPreview.jsx").then((module) => ({ default: module.AvatarPortrait })));
 
 // Zone/activity are shared; camera transforms and puzzle progress stay local.
 export function VisitorZone({ zone, activity = "idle" }) {
@@ -9,7 +10,7 @@ export function VisitorZone({ zone, activity = "idle" }) {
   return null;
 }
 
-export default function VisitorPresence() {
+export default function VisitorPresence({ Preview = AvatarPortrait }) {
   const { visitors, identity } = useCollaboration();
   const now = useActivityClock(visitors);
   return (
@@ -17,10 +18,10 @@ export default function VisitorPresence() {
       {visitors.map((visitor) => (
         <li key={visitor.socketId}>
           <span className="visitor-avatar-mark" aria-hidden="true">
-            {visitor.avatarType === "female" ? "F" : "M"}
+            <Suspense fallback={null}><Preview avatarType={visitor.avatarType} /></Suspense>
           </span>
           <span>{visitor.username}{visitor.visitorId === identity?.visitorId ? " (you)" : ""}</span>
-          <small>{visitor.avatarType === "female" ? "Female avatar" : "Male avatar"} · {ZONE_LABELS[visitor.currentZone]}{ACTIVITY_LABELS[visitorActivity(visitor, now)] && ` · ${ACTIVITY_LABELS[visitorActivity(visitor, now)]}`}</small>
+          <small>{ACTIVITY_LABELS[visitorActivity(visitor, now)] || ZONE_LABELS[visitor.currentZone]}</small>
         </li>
       ))}
     </ul>

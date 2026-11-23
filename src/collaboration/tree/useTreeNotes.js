@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { noteLength } from "./treeNoteLayout.js";
 import { placementFromId } from "../../../shared/fenceLayout.js";
 
-export default function useTreeNotes({ active, notes, createNote, status, autoCompose = false }) {
+export default function useTreeNotes({ active, notes, createNote, status, autoCompose = false, arrived = true }) {
   const [stage, setStage] = useState("idle");
   const [draft, setDraft] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -14,20 +14,27 @@ export default function useTreeNotes({ active, notes, createNote, status, autoCo
   const busy = useRef(false);
   const mounted = useRef(true);
   const previousStage = useRef("idle");
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [info, setInfo] = useState(null);
+  const infoTimer = useRef(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(infoTimer.current); }; }, []);
   useEffect(() => {
-    if (active && autoCompose) setStage("compose");
+    if (active && autoCompose) setStage("arriving");
     if (!active) {
       setStage("idle");
       setSelectedId(null);
+      setInfo(null);
       setError("");
     }
   }, [active, autoCompose]);
+  useEffect(() => {
+    if (active && arrived && stage === "arriving") setStage("compose");
+  }, [active, arrived, stage]);
   useEffect(() => { focusAnchor(null); }, [active, stage]);
   const cancel = useCallback(() => {
     if (busy.current) return;
     setStage((current) => current === "read" ? previousStage.current : "idle");
     setSelectedId(null);
+    setInfo(null);
     setError("");
   }, []);
   const begin = useCallback(() => {
@@ -73,13 +80,21 @@ export default function useTreeNotes({ active, notes, createNote, status, autoCo
     }
   }, [active, stage, draft, createNote, uncertain]);
   return {
+    info, showInfo: (id, source = "hover") => { clearTimeout(infoTimer.current); setInfo((current) => current?.id === id && current.source === source ? current : { id, source }); },
+    hideInfo: (id, source = "hover") => {
+      clearTimeout(infoTimer.current);
+      infoTimer.current = setTimeout(() => setInfo((current) => current?.id === id && current.source === source ? null : current), 160);
+    },
     stage, draft, setDraft, focusedAnchorId, focusAnchor, pending, uncertain, error, status, begin, cancel, place,
     retry: () => { if (request.current) place(request.current.anchorId); },
-    continueToPlacement: () => { setError(""); setStage("place"); },
+    continueToPlacement: () => {
+      if (!draft.trim() || noteLength(draft) > 180) { setError("Write 1–180 characters before choosing a position."); return false; }
+      setError(""); setStage("place"); return true;
+    },
     edit: () => { if (!busy.current && !uncertain) setStage("compose"); },
     viewMessages: () => { if (!busy.current) { setSelectedId(null); setStage("browse"); } },
     read: (id) => { if (!busy.current) { previousStage.current = stage === "read" ? previousStage.current : stage; setSelectedId(id); setStage("read"); } },
     selected: notes.find((note) => note.id === selectedId),
-    modal: active && (stage === "compose" || stage === "read"),
+    modal: active && stage === "compose" && arrived,
   };
 }

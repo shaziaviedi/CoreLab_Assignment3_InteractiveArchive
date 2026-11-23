@@ -45,11 +45,11 @@
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 14px;
   pointer-events: auto;
 }
 .memorial-view-controls {
-  bottom: max(24px, env(safe-area-inset-bottom));
+  bottom: max(32px, calc(env(safe-area-inset-bottom) + 12px));
   white-space: nowrap;
 }
 .memorial-navigation button:not(.viewer-back) {
@@ -109,3 +109,8 @@
   .memorial-navigation button { padding: 10px 12px; font-size: 12px; }
   .pool-side-navigation button { font-size: 24px; }
 }
+
+.tree-navigation .memorial-view-controls { max-width: calc(100vw - 24px); gap: 12px; }
+.tree-navigation .viewer-back { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; box-sizing: border-box; }
+.pool-navigation .memorial-view-controls { bottom: max(40px, calc(env(safe-area-inset-bottom) + 20px)); }
+@media (max-width: 420px) { .tree-navigation .memorial-view-controls { gap: 8px; } .tree-navigation .viewer-back { padding: 10px 9px; font-size: 9px; letter-spacing: 0.07em; } }

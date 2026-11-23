@@ -21,7 +21,7 @@ import PresenceScene from "./collaboration/presence/PresenceScene.jsx";
 import PresenceLabels from "./collaboration/presence/PresenceLabels.jsx";
 import { peerVisitors } from "./collaboration/presence/presenceLayout.js";
 import CollaborationNotice from "./collaboration/components/CollaborationNotice.jsx";
-import TreeNotePanel, { TreeNoteEntry } from "./collaboration/tree/TreeNotePanel.jsx";
+import TreeNotePanel from "./collaboration/tree/TreeNotePanel.jsx";
 import usePoolFlowers from "./collaboration/flowers/usePoolFlowers.js";
 import PoolFlowers3D from "./collaboration/flowers/PoolFlowers3D.jsx";
 import FlowerOverlay from "./collaboration/flowers/FlowerOverlay.jsx";
@@ -90,7 +90,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
   const sceneInteractive = gpuReady && !preview && !interactionBlocked && !archiveOpen;
   const { notes, createNote, flowers, createFlower, status, visitors, identity, roomId, announcement } = useCollaboration();
   const treeActive = sceneInteractive && interactionZone === "tree" && !cameraZone;
-  const treeNotes = useTreeNotes({ active: treeActive, notes, createNote, status, autoCompose: true });
+  const treeNotes = useTreeNotes({ active: treeActive, notes, createNote, status, autoCompose: true, arrived: !transitioning && gesture.current.ready });
   // Writing, browsing and cancelling share one orbit; contributions never reset it.
   const treeClose = interactionZone === "tree" && !cameraZone;
   const poolSide = POOL_VIEW_SIDES[sideIndex(poolStep)];
@@ -100,9 +100,10 @@ export default React.memo(function Experience({ preview = false, interactionBloc
   const flowerTooltip = useRef(null);
   const moderation = useHiddenNotes(roomId);
   const treeTargets = useRef(new Map());
+  const treeHint = useRef(null), treeTooltip = useRef(null);
   const presenceLabels = useRef(new Map());
   const peers = useMemo(() => peerVisitors(visitors, identity?.visitorId), [visitors, identity?.visitorId]);
-  const activity = treeActive ? (treeNotes.stage === "compose" ? "writing-note" : treeNotes.stage === "place" ? "placing-note" :
+  const activity = mode === "photo" ? "photographing" : treeActive ? (treeNotes.stage === "compose" ? "writing-note" : treeNotes.stage === "place" ? "placing-note" :
     treeNotes.stage === "read" ? "reading-note" : "idle") : flowerActive && (flowerControls.previewId || flowerControls.pending) ? "placing-flower" : "idle";
   const say = useCallback((message, duration = 3100) => {
     setToast(message);
@@ -113,6 +114,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
     toastTimer.current = setTimeout(() => setToast(""), duration);
   }, []);
   const enterInteraction = useCallback((zone) => {
+    setTransitioning(true);
     setInteractionZone(zone);
     setCameraZone(null);
     setSelected(null);
@@ -277,6 +279,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               interactive={sceneInteractive && !treeNotes.modal}
               mode={mode}
               treeClose={treeClose}
+              treeFocus={treeNotes.selected ?? null}
               hasSelectedFragment={Boolean(selected)}
               poolStep={poolStep}
               poolLayout={poolLayout}
@@ -293,8 +296,8 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               guideMenuRef={guideMenuRef}
             />
             {placed.tree && <TreeNotes3D notes={notes} controls={treeNotes}
-              enabled={treeActive && !treeNotes.modal} gesture={gesture} hiddenNoteIds={moderation.hiddenNoteIds} targets={treeTargets}
-              onViewHover={setHotspotHint} />}
+              enabled={treeActive && !treeNotes.modal && !transitioning} gesture={gesture} hiddenNoteIds={moderation.hiddenNoteIds} targets={treeTargets}
+              hint={treeHint} tooltip={treeTooltip} />}
             {placed.north && <PoolFlowers3D layout={poolLayout} side={poolSide} flowers={flowers}
               controls={flowerControls} enabled={flowerActive}
               infoEnabled={sceneInteractive && !treeNotes.modal && !transitioning}
@@ -482,7 +485,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               <Icon name="reset" />
             </button>
         </>}
-        {!preview && identity && <CollaborationStatus onEdit={onEditProfile} />}
+        {!preview && identity && mode === "main" && !archiveOpen && <CollaborationStatus onEdit={onEditProfile} />}
       </div>
       {interactionZone && !cameraZone && !archiveOpen && (
         <MemorialNavigation
@@ -493,6 +496,8 @@ export default React.memo(function Experience({ preview = false, interactionBloc
             if (!transitioning) setPoolStep((step) => step + direction);
           }}
           onBack={() => setInteractionZone(null)}
+          onCompose={interactionZone === "tree" ? () => { if (treeNotes.selected) setTransitioning(true); treeNotes.begin(); } : undefined}
+          composeDisabled={transitioning || treeNotes.pending || treeNotes.stage === "compose"}
         />
       )}
       {hotspotHint && mode === "main" && !archiveOpen && (
@@ -531,18 +536,11 @@ export default React.memo(function Experience({ preview = false, interactionBloc
           </div>
         </>
       )}
-      {interactionZone === "tree" && !cameraZone && treeActive && treeNotes.stage === "idle" && (
-        <div className="tree-interaction-entry"><TreeNoteEntry controls={treeNotes} disabled={transitioning} /></div>
-      )}
-      {treeActive && !treeNotes.modal && hotspotHint?.zone === "messages" && (
-        <button className="tree-view-hint" style={{ left: hotspotHint.x, top: hotspotHint.y }}
-          onClick={treeNotes.viewMessages}><img src={`${import.meta.env.BASE_URL}svg/magnify.svg`} alt="" /> <span>View Messages</span></button>
-      )}
-      <TreeNotePanel controls={treeNotes} active={treeActive} notes={notes} moderation={moderation} />
+      <TreeNotePanel controls={treeNotes} active={treeActive && !transitioning} notes={notes} moderation={moderation} />
       <TreeNoteAccessibility notes={notes} controls={treeNotes} active={treeActive && !treeNotes.modal && !transitioning}
-        targets={treeTargets} hiddenNoteIds={moderation.hiddenNoteIds} />
+        targets={treeTargets} hiddenNoteIds={moderation.hiddenNoteIds} hint={treeHint} tooltip={treeTooltip} />
       <PresenceLabels peers={peers} labels={presenceLabels} />
-      <CollaborationNotice announcement={announcement} enabled={sceneInteractive && !treeNotes.modal} />
+      <CollaborationNotice announcement={announcement} enabled={sceneInteractive && !treeNotes.modal && mode !== "pool" && !(announcement?.kind === "flower" && announcement?.own)} />
       {placed.north && <FlowerOverlay layout={poolLayout} side={poolSide} flowers={flowers}
         controls={flowerControls} active={flowerActive} status={status}
         targets={flowerTargets} tooltip={flowerTooltip} />}

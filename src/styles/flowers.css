@@ -46,3 +46,6 @@
 .rose-colors button[aria-pressed="true"] { outline: 1px solid #fff7ed; outline-offset: 4px; }
 .rose-colors button:focus-visible { outline: 2px solid #fff7ed; outline-offset: 4px; }
 .rose-colors:disabled { opacity: 0.6; }
+
+.flower-status-copy { display: block; animation: flower-label-enter 160ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .flower-status-copy { animation: none; } }

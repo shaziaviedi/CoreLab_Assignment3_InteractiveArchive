@@ -184,3 +184,22 @@ test("reduced-motion preference completes camera transfers without automatic tra
     assert.ok(f.state.current.camera.position.distanceTo(poolCameraPosition(f.layout, 2)) < 1e-10);
   } finally { if (previous === undefined) delete globalThis.window; else globalThis.window = previous; }
 });
+
+test("reading a paper note returns to the visitor's unchanged orbit after closing", async (t) => {
+  const f = await fixture(t);
+  await f.update({ mode: "tree", treeClose: true }); await f.frames();
+  f.pointer("pointerdown"); f.pointer("pointermove", { clientX: 300 }); f.pointer("pointerup", { clientX: 300 });
+  await f.frames();
+  const position = f.state.current.camera.position.clone(), rotation = f.state.current.camera.quaternion.clone();
+  const note = { id: "focused-note", fencePosition: { column: 84, row: 12 } };
+  await f.update({ treeFocus: note });
+  for (let frame = 0; frame < 120; frame++) {
+    await f.frames(1);
+    const p = f.state.current.camera.position;
+    assert.ok(Math.hypot(p.x + 3, p.z - 9.92) > 1.2);
+  }
+  assert.ok(Math.abs(f.state.current.camera.fov - 32) < 1e-8);
+  await f.update({ treeFocus: null }); await f.frames();
+  assert.ok(f.state.current.camera.position.distanceTo(position) < 1e-6);
+  assert.ok(f.state.current.camera.quaternion.angleTo(rotation) < 1e-6);
+});

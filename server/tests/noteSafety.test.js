@@ -67,7 +67,7 @@ test("hidden tags still occupy their anchors and keyboard focus previews only vi
   const moderation = { hiddenNoteIds, showNote: () => {}, hideNote: () => {} };
   const html = renderToStaticMarkup(React.createElement(TreeNotePanel, { controls: { ...controls, stage: "read", selected: note }, notes: [note], moderation, active: true }));
   assert.match(html, /Message hidden on this browser/);
-  assert.match(html, /Show this message/);
+  assert.match(html, /SHOW MESSAGE/);
   assert.doesNotMatch(html, /Content a visitor chose to hide/);
   const access = renderToStaticMarkup(React.createElement(TreeNoteAccessibility, { notes: [note], controls, active: true, targets: { current: new Map() }, hiddenNoteIds }));
   assert.match(access, /Read hidden message at point 1/);

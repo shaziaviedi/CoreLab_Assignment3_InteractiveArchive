@@ -9,7 +9,7 @@ import { createMemorialServer } from "../app.js";
 import { readConfig } from "../config.js";
 import useMemorialSocket from "../../src/collaboration/useMemorialSocket.js";
 import useTreeNotes from "../../src/collaboration/tree/useTreeNotes.js";
-import { TREE_NOTE_ANCHORS, limitNote, noteLength } from "../../src/collaboration/tree/treeNoteLayout.js";
+import { TREE_NOTE_ANCHORS, noteAnchor, NOTE_RADIUS, limitNote, noteLength } from "../../src/collaboration/tree/treeNoteLayout.js";
 import { NOTE_ANCHORS } from "../../shared/memorialLayout.js";
 import { SURVIVOR_TREE } from "../../src/scene/memorialLayout.js";
 import TreeNotes3D from "../../src/collaboration/tree/TreeNotes3D.jsx";
@@ -94,7 +94,7 @@ test("tree anchors stay fixed on the installation and Unicode limits match the s
   assert.deepEqual(TREE_NOTE_ANCHORS.map((anchor) => anchor.id), [...NOTE_ANCHORS]);
   assert.equal(new Set(TREE_NOTE_ANCHORS.map((anchor) => anchor.position.join(","))).size, 24);
   for (const anchor of TREE_NOTE_ANCHORS) {
-    assert.ok(Math.abs(Math.hypot(anchor.position[0] - SURVIVOR_TREE[0], anchor.position[2] - SURVIVOR_TREE[2]) - 0.85) < 1e-10);
+    assert.ok(Math.abs(Math.hypot(anchor.position[0] - SURVIVOR_TREE[0], anchor.position[2] - SURVIVOR_TREE[2]) - NOTE_RADIUS) < 1e-10);
     assert.ok(anchor.position[1] >= 0.46 && anchor.position[1] <= 0.82);
   }
   assert.equal(noteLength(limitNote("🌿".repeat(181))), 180);
@@ -133,7 +133,7 @@ test("raycast targets omit occupied anchors, consume clicks and reject orbit dra
   const note = { id: "existing", anchorId: "tree-01", text: "Already here" };
   // Rendering geometry/interaction is independent of browser CanvasTexture creation.
   const Tag = (props) => React.createElement("mesh", props);
-  const renderer = await create(React.createElement(TreeNotes3D, { notes: [note], controls, enabled: true, gesture, Tag }), { camera: { position: [-3, 1.7, 13.12] }, beforeReturn: (canvas) => { canvas.dataset = {}; canvas.style.setProperty = () => {}; } });
+  const renderer = await create(React.createElement(TreeNotes3D, { notes: [note], controls, enabled: true, gesture, Tag, pickPlacement: () => noteAnchor({ fencePosition: { column: 7, row: 14 } }) }), { camera: { position: [-3, 1.7, 13.12] }, beforeReturn: (canvas) => { canvas.dataset = {}; canvas.style.setProperty = () => {}; } });
   const targets = renderer.scene.findAll((node) => typeof node.props.onClick === "function");
   assert.equal(targets.length, 2); // One continuous fence surface and one readable tag.
   const target = targets[0];

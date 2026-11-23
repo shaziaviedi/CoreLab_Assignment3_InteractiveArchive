@@ -19,7 +19,6 @@ export default function CollaborationStatus({ onEdit, Preview = AvatarPreview })
             status === "reconnecting" ? "Reconnecting" : "Disconnected"} · {visitors.length} {visitors.length === 1 ? "visitor" : "visitors"}</span>
         </summary>
         <div className="presence-panel">
-          <p>Room · {roomId || "Invalid link"}</p>
           <RoomShare roomId={roomId} />
           <VisitorPresence />
           {error && <p role="status">{error}</p>}

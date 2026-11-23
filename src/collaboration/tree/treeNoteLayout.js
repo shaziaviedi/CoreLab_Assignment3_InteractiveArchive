@@ -5,13 +5,14 @@ import { SURVIVOR_TREE } from "../../scene/memorialLayout.js";
 export const INSTALLATION_RADIUS = TREE_INSTALLATION.radius;
 export const INSTALLATION_HEIGHTS = [TREE_INSTALLATION.lowerHeight, TREE_INSTALLATION.upperHeight];
 export const TAG_SCALE = TREE_INSTALLATION.tagScale;
+export const NOTE_RADIUS = INSTALLATION_RADIUS + TREE_INSTALLATION.noteOffset;
 export const NOTE_CENTER_OFFSET = 0.245 * TAG_SCALE;
 export function noteAnchor(note) {
   const placement = notePlacement(note);
   return placement && { ...placement, position: [
-    SURVIVOR_TREE[0] + Math.sin(placement.angle) * INSTALLATION_RADIUS,
+    SURVIVOR_TREE[0] + Math.sin(placement.angle) * NOTE_RADIUS,
     SURVIVOR_TREE[1] + placement.height,
-    SURVIVOR_TREE[2] + Math.cos(placement.angle) * INSTALLATION_RADIUS,
+    SURVIVOR_TREE[2] + Math.cos(placement.angle) * NOTE_RADIUS,
   ] };
 }
 // Legacy IDs still resolve exactly; keyboard navigation uses a manageable subset

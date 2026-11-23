@@ -41,7 +41,7 @@ export default function useMemorialSocket(
     const own = record.authorId === identityRef.current?.visitorId;
     if (!own && Date.now() - announcementTime.current < 6000) return;
     announcementTime.current = Date.now();
-    setAnnouncement({ id: record.id, expiresAt: Date.now() + 3500, text: own ? (kind === "note" ? "Your message is attached." : "Your flower has been placed.") :
+    setAnnouncement({ id: record.id, kind, own, expiresAt: Date.now() + 3500, text: own ? (kind === "note" ? "Your message is attached." : "Your flower has been placed.") :
       (kind === "note" ? "A visitor left a message." : "A visitor left a flower.") });
   }, []);
   const ready = useRef(false);

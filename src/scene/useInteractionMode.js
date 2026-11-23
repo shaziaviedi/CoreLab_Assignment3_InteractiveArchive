@@ -5,6 +5,12 @@ export function canActivate(gesture, event) {
     !gesture.pointers && event.button === 0 && (event.delta ?? 0) < 6;
 }
 
+// Keep the drag latch until the next pointerdown to suppress its trailing click,
+// but resume hover as soon as all pointers are released.
+export function canHover(gesture) {
+  return gesture.ready && !gesture.fragmentDragging && !(gesture.dragged && gesture.pointers > 0);
+}
+
 export default function useInteractionMode() {
   return useRef({
     ready: false,

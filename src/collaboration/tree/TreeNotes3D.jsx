@@ -2,18 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { DoubleSide, Vector3 } from "three";
 import { SURVIVOR_TREE } from "../../scene/memorialLayout.js";
-import { canActivate } from "../../scene/useInteractionMode.js";
-import { FENCE_GRID, nearestFencePlacement, notesOverlap } from "../../../shared/fenceLayout.js";
+import { canActivate, canHover } from "../../scene/useInteractionMode.js";
+import { FENCE_GRID, notesOverlap } from "../../../shared/fenceLayout.js";
 import { TREE_INSTALLATION } from "../../../shared/memorialLayout.js";
 import {
-  INSTALLATION_RADIUS, INSTALLATION_HEIGHTS, TAG_SCALE, NOTE_CENTER_OFFSET,
+  INSTALLATION_RADIUS, INSTALLATION_HEIGHTS, TAG_SCALE, NOTE_CENTER_OFFSET, NOTE_RADIUS,
   TREE_NOTE_ANCHORS, KEYBOARD_NOTE_ANCHORS, noteAnchor, anchorFacesCamera,
 } from "./treeNoteLayout.js";
 import PaperTag from "./PaperTag.jsx";
+import { createFencePicker, projectNote } from "./treeInteraction.js";
 
-export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenNoteIds, targets, onViewHover, Tag = PaperTag }) {
+export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenNoteIds, targets, hint, tooltip, pickPlacement, Tag = PaperTag }) {
   const { gl, camera, size } = useThree();
   const point = useMemo(() => new Vector3(), []);
+  const surface = useRef(null), installation = useRef(null);
+  const picker = useMemo(createFencePicker, []);
+  const indicated = controls.selected ?? notes.find((note) => note.id === controls.info?.id);
   const wires = useMemo(() => {
     const vertices = [], radius = INSTALLATION_RADIUS;
     const vertex = (column, height) => vertices.push(Math.sin(column / FENCE_GRID.columns * Math.PI * 2) * radius,
@@ -40,13 +44,13 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
     setHovered(null);
     delete gl.domElement.dataset.treeNote;
     delete gl.domElement.dataset.treeView;
-    onViewHover?.(null);
+    if (controls.info) controls.hideInfo?.(controls.info.id, "hover");
   };
   useEffect(() => {
     clearHover();
     gl.domElement.style.setProperty("--memorial-magnify", `url("${import.meta.env?.BASE_URL ?? "/"}svg/magnify.svg") 18 18, pointer`);
-    return () => { delete gl.domElement.dataset.treeNote; delete gl.domElement.dataset.treeView; onViewHover?.(null); };
-  }, [enabled, controls.stage, gl, onViewHover]);
+    return () => { delete gl.domElement.dataset.treeNote; delete gl.domElement.dataset.treeView; };
+  }, [enabled, controls.stage, gl]);
   useFrame((_, dt) => {
     if (preview && previewGroup.current) {
       const current = previewMotion.current ?? { angle: preview.angle, height: preview.height };
@@ -56,10 +60,19 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
       current.height += (preview.height - current.height) * blend;
       previewMotion.current = current;
       // Interpolate along the cylinder, never across its interior or off its face.
-      previewGroup.current.position.set(SURVIVOR_TREE[0] + Math.sin(current.angle) * INSTALLATION_RADIUS,
-        SURVIVOR_TREE[1] + current.height, SURVIVOR_TREE[2] + Math.cos(current.angle) * INSTALLATION_RADIUS);
+      previewGroup.current.position.set(SURVIVOR_TREE[0] + Math.sin(current.angle) * NOTE_RADIUS,
+        SURVIVOR_TREE[1] + current.height, SURVIVOR_TREE[2] + Math.cos(current.angle) * NOTE_RADIUS);
       previewGroup.current.rotation.y = current.angle;
     } else previewMotion.current = null;
+    const screen = indicated && enabled ? projectNote(indicated, camera, size.width, size.height) : null;
+    if (tooltip?.current) {
+      tooltip.current.hidden = !screen;
+      if (screen) tooltip.current.style.transform = `translate(${Math.max(115, Math.min(size.width - 115, screen.x))}px, ${Math.max(75, screen.y - 36)}px) translate(-50%, -100%)`;
+    }
+    if (hint?.current) {
+      hint.current.hidden = !screen || controls.stage === "read" || !gesture.current.ready;
+      if (screen) hint.current.style.transform = `translate(${Math.min(size.width - 145, screen.x + 32)}px, ${screen.y + 8}px)`;
+    }
     if (!targets) return;
     camera.updateMatrixWorld();
     for (const [id, element] of targets.current) {
@@ -77,51 +90,55 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
     }
   });
   function surfacePoint(event) {
-    const dx = event.point.x - SURVIVOR_TREE[0], dz = event.point.z - SURVIVOR_TREE[2];
-    const placement = nearestFencePlacement(Math.atan2(dx, dz), event.point.y - SURVIVOR_TREE[1]);
-    return noteAnchor({ fencePosition: placement.fencePosition });
+    return pickPlacement ? pickPlacement(event) : picker(event, camera, gl.domElement, surface.current, installation.current);
   }
   function hoverSurface(event) {
-    if (!enabled || !gesture.current.ready || gesture.current.dragged) return;
+    if (!enabled || !canHover(gesture.current)) return;
+    const anchor = surfacePoint(event);
+    if (!anchor) return;
     event.stopPropagation();
     if (placing) {
-      setHovered(surfacePoint(event));
+      setHovered(anchor);
       gl.domElement.dataset.treeNote = "true";
-    } else if (controls.stage === "idle") {
-      gl.domElement.dataset.treeView = "true";
-      onViewHover?.({ zone: "messages", x: event.clientX, y: event.clientY });
     }
+  }
+  function hoverNote(event, note) {
+    if (!enabled || !canHover(gesture.current)) return;
+    event.stopPropagation();
+    setHovered(null);
+    controls.showInfo?.(note.id, "hover");
+    gl.domElement.dataset.treeView = "true";
   }
   return (
     <group name="survivor-message-installation">
-      <group position={SURVIVOR_TREE}>
+      <group ref={installation} position={SURVIVOR_TREE}>
         <lineSegments raycast={() => null}>
           <bufferGeometry><bufferAttribute attach="attributes-position" args={[wires, 3]} /></bufferGeometry>
-          <lineBasicMaterial color="#7b7265" transparent opacity={0.32} />
+          <lineBasicMaterial color="#b8bec3" transparent opacity={0.32} />
         </lineSegments>
         {INSTALLATION_HEIGHTS.map((height) => (
           <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]} raycast={() => null} castShadow receiveShadow>
             <torusGeometry args={[INSTALLATION_RADIUS, 0.012, 6, 96]} />
-            <meshStandardMaterial color="#7b7265" roughness={0.65} metalness={0.55} />
+            <meshStandardMaterial color="#b8bec3" roughness={0.65} metalness={0.55} />
           </mesh>
         ))}
         {TREE_NOTE_ANCHORS.slice(0, 12).map((anchor) => (
           <mesh key={anchor.id} position={[Math.sin(anchor.angle) * INSTALLATION_RADIUS, TREE_INSTALLATION.postHeight / 2, Math.cos(anchor.angle) * INSTALLATION_RADIUS]}
             raycast={() => null} castShadow receiveShadow>
             <cylinderGeometry args={[0.014, 0.019, TREE_INSTALLATION.postHeight, 6]} />
-            <meshStandardMaterial color="#7b7265" roughness={0.65} metalness={0.55} />
+            <meshStandardMaterial color="#b8bec3" roughness={0.65} metalness={0.55} />
           </mesh>
         ))}
         {/* One lightweight raycast surface replaces thousands of anchor meshes. */}
-        {enabled && <mesh name="fence-placement-surface" position={[0, (FENCE_GRID.bottom + TREE_INSTALLATION.upperHeight) / 2, 0]}
+        {enabled && <mesh ref={surface} name="fence-placement-surface" position={[0, (FENCE_GRID.bottom + TREE_INSTALLATION.upperHeight) / 2, 0]}
           onPointerOver={hoverSurface} onPointerMove={hoverSurface} onPointerOut={clearHover}
           onClick={(event) => {
             event.stopPropagation();
             if (!canActivate(gesture.current, event)) return;
             if (placing) {
               const anchor = surfacePoint(event);
-              if (!notes.some((note) => notesOverlap(note, anchor))) controls.place(anchor.id);
-            } else if (controls.stage === "idle") { clearHover(); controls.viewMessages(); }
+              if (anchor && !notes.some((note) => notesOverlap(note, anchor))) controls.place(anchor.id);
+            }
           }}>
           <cylinderGeometry args={[INSTALLATION_RADIUS + 0.004, INSTALLATION_RADIUS + 0.004, TREE_INSTALLATION.upperHeight - FENCE_GRID.bottom, 96, 1, true]} />
           <meshBasicMaterial side={DoubleSide} transparent opacity={0} depthWrite={false} colorWrite={false} />
@@ -132,8 +149,8 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
         if (!anchor) return null;
         return <group key={note.id} position={anchor.position} rotation={[0, anchor.angle, 0]} scale={TAG_SCALE}>
           <Tag text={hiddenNoteIds?.has(note.id) ? "Message hidden" : note.text} seed={index}
-            onPointerOver={(event) => { if (enabled) { event.stopPropagation(); setHovered(null); onViewHover?.(null); delete gl.domElement.dataset.treeView; gl.domElement.dataset.treeNote = "true"; } }}
-            onPointerMove={(event) => { event.stopPropagation(); onViewHover?.(null); }} onPointerOut={clearHover}
+            onPointerOver={(event) => hoverNote(event, note)}
+            onPointerMove={(event) => hoverNote(event, note)} onPointerOut={clearHover}
             onClick={(event) => {
               event.stopPropagation();
               if (enabled && anchorFacesCamera(anchor, camera.position) && !controls.pending && canActivate(gesture.current, event)) controls.read(note.id);

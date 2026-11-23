@@ -82,6 +82,17 @@ export function treeCameraPosition(angle, out = new THREE.Vector3(), radius = TR
   );
 }
 
+export function treeTransitionPosition(start, end, progress, out) {
+  const t = ease(progress);
+  const a = Math.atan2(start.x - SURVIVOR_TREE[0], start.z - SURVIVOR_TREE[2]);
+  const b = Math.atan2(end.x - SURVIVOR_TREE[0], end.z - SURVIVOR_TREE[2]);
+  const angle = a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
+  const radius = THREE.MathUtils.lerp(Math.hypot(start.x - SURVIVOR_TREE[0], start.z - SURVIVOR_TREE[2]),
+    Math.hypot(end.x - SURVIVOR_TREE[0], end.z - SURVIVOR_TREE[2]), t);
+  return out.set(SURVIVOR_TREE[0] + Math.sin(angle) * radius,
+    THREE.MathUtils.lerp(start.y, end.y, t), SURVIVOR_TREE[2] + Math.cos(angle) * radius);
+}
+
 const treeRay = new THREE.Ray();
 const treeHit = new THREE.Vector3();
 

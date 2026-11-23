@@ -13,7 +13,7 @@ import { validateContribution } from "../validation.js";
 import { fencePlacement, nearestFencePlacement, notesOverlap } from "../../shared/fenceLayout.js";
 import { ROSE_COLORS } from "../../shared/protocol.js";
 import { TREE_INSTALLATION } from "../../shared/memorialLayout.js";
-import { noteAnchor, KEYBOARD_NOTE_ANCHORS, TAG_SCALE } from "../../src/collaboration/tree/treeNoteLayout.js";
+import { noteAnchor, NOTE_RADIUS, KEYBOARD_NOTE_ANCHORS, TAG_SCALE } from "../../src/collaboration/tree/treeNoteLayout.js";
 import useTreeNotes from "../../src/collaboration/tree/useTreeNotes.js";
 import usePoolFlowers from "../../src/collaboration/flowers/usePoolFlowers.js";
 import { roseRestingTransform } from "../../src/collaboration/flowers/roseAppearance.js";
@@ -32,7 +32,7 @@ test("fine fence positions validate bounds, preserve legacy attachments and reje
     const input = validateContribution("note", notePayload(column, row));
     assert.deepEqual(input.fencePosition, { column, row });
     const anchor = noteAnchor(input);
-    assert.ok(Math.abs(Math.hypot(anchor.position[0] - SURVIVOR_TREE[0], anchor.position[2] - SURVIVOR_TREE[2]) - TREE_INSTALLATION.radius) < 1e-10);
+    assert.ok(Math.abs(Math.hypot(anchor.position[0] - SURVIVOR_TREE[0], anchor.position[2] - SURVIVOR_TREE[2]) - NOTE_RADIUS) < 1e-10);
     assert.ok(anchor.position[1] - 0.46 * TAG_SCALE > 0.1);
     assert.deepEqual(nearestFencePlacement(anchor.angle, anchor.height).fencePosition, input.fencePosition);
   }
@@ -204,7 +204,9 @@ test("surface preview follows the cylinder across its seam and a drag cannot sub
   const gesture = { current: { ready: true, dragged: false, pointers: 0, fragmentDragging: false } };
   const controls = { stage: "place", status: "connected", draft: "A small tag", place: (id) => submitted.push(id) };
   const Tag = () => React.createElement("group");
-  const renderer = await create(React.createElement(TreeNotes3D, { notes: [], controls, gesture, enabled: true, Tag }), {
+  const renderer = await create(React.createElement(TreeNotes3D, { notes: [], controls, gesture, enabled: true, Tag,
+    pickPlacement: (event) => noteAnchor({ fencePosition: nearestFencePlacement(Math.atan2(event.point.x - SURVIVOR_TREE[0], event.point.z - SURVIVOR_TREE[2]), event.point.y).fencePosition }),
+  }), {
     beforeReturn: (canvas) => { canvas.dataset = {}; canvas.style.setProperty = () => {}; },
   });
   const surface = renderer.scene.findByProps({ name: "fence-placement-surface" });
@@ -217,7 +219,7 @@ test("surface preview follows the cylinder across its seam and a drag cannot sub
   await renderer.fireEvent(surface, "pointerMove", event(1, 0.82));
   for (let frame = 0; frame < 20; frame++) {
     await renderer.advanceFrames(1, 1 / 60);
-    assert.ok(Math.abs(Math.hypot(preview.position.x - SURVIVOR_TREE[0], preview.position.z - SURVIVOR_TREE[2]) - TREE_INSTALLATION.radius) < 1e-8);
+    assert.ok(Math.abs(Math.hypot(preview.position.x - SURVIVOR_TREE[0], preview.position.z - SURVIVOR_TREE[2]) - NOTE_RADIUS) < 1e-8);
     assert.ok(preview.position.y >= 0.32 && preview.position.y <= 0.82);
     assert.ok(preview.position.z > SURVIVOR_TREE[2], "seam motion stays on the near face");
   }

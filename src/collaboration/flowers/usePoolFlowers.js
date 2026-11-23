@@ -6,6 +6,7 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
   const [info, setInfo] = useState(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState(null);
   const busy = useRef(false);
   const requests = useRef(new Map());
   const mounted = useRef(true);
@@ -16,7 +17,13 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
     setPreviewId(null);
     setInfo(null);
     setError("");
+    setFeedback(null);
   }, [active, side]);
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 3000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
   const showInfo = useCallback((anchorId, source = "hover") => {
     setInfo((previous) => {
       // Compatibility mouse events must not unpin a touch label, and hovering
@@ -52,10 +59,14 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
     busy.current = true;
     setPending(true);
     setError("");
+    setFeedback(null);
     try {
       const result = await createFlower(payload);
       if (!mounted.current) return;
-      if (result.ok) requests.current.delete(anchor.id);
+      if (result.ok) {
+        requests.current.delete(anchor.id);
+        setFeedback({ id: payload.requestId, text: "Your flower has been placed" });
+      }
       else {
         setError(result.error?.message || "This position is unavailable. Please choose another.");
         if (!["ACK_TIMEOUT", "INVALID_REPLY", "DISCONNECTED"].includes(result.error?.code))
@@ -68,5 +79,5 @@ export default function usePoolFlowers({ active, side, flowers, createFlower, st
       if (mounted.current) setPending(false);
     }
   }, [active, side, status, createFlower, roseColor]);
-  return { roseColor, setRoseColor, previewId, info, pending, error, preview, clearPreview, place, showInfo, hideInfo, dismissInfo };
+  return { roseColor, setRoseColor, previewId, info, pending, error, feedback, preview, clearPreview, place, showInfo, hideInfo, dismissInfo };
 }
