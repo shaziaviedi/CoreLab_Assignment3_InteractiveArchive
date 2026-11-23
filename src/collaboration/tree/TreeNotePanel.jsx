@@ -10,7 +10,7 @@ export default function TreeNotePanel({ controls, active, moderation }) {
     panel.current?.querySelector("textarea")?.focus();
     return () => previous?.isConnected && previous.focus({ preventScroll: true });
   }, [active, stage]);
-  if (!active || stage === "idle" || stage === "arriving") return null;
+  if (!active || ["idle", "arriving", "hidden"].includes(stage)) return null;
   const connected = status === "connected";
   function key(event) {
     if (event.key === "Escape") { event.stopPropagation(); controls.cancel(); }
@@ -25,11 +25,8 @@ export default function TreeNotePanel({ controls, active, moderation }) {
     return <div className="tree-reading-controls">
       {/* Equivalent full-text access for screen readers; the visual reader is 3D. */}
       <p className="visually-hidden" aria-live="polite">{hidden ? "Message hidden on this browser." : selected?.text}</p>
-      <button className="viewer-back" onClick={controls.cancel}>← BACK TO MESSAGES</button>
-      {selected && moderation && <button className="viewer-back" onClick={() => hidden ? moderation.showNote(selected.id) : moderation.hideNote(selected.id)}>
-        {hidden ? "SHOW MESSAGE" : "HIDE MESSAGE"}
-      </button>}
-      {moderation?.warning && <p role="status">{moderation.warning}</p>}
+      <button className="viewer-back" onClick={controls.backToMessages}>← BACK TO MESSAGES</button>
+      <button className="viewer-back" onClick={controls.hideMessages}>HIDE MESSAGES</button>
     </div>;
   }
   if (stage === "browse") return null;

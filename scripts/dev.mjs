@@ -58,7 +58,12 @@ try {
         if (server.exitCode !== null) throw new Error("Backend startup failed.");
       }
       if (closing) process.exitCode ||= 1;
-      else if (!state) throw new Error("Backend startup timed out. Check the server output above.");
+      else if (!state) throw new Error(
+        "Backend did not become ready within 120 seconds. Check the server output above." +
+        (process.platform === "darwin"
+          ? " If there is no server error, files may be offloaded by cloud storage. In Finder, choose Keep Downloaded for the project folder and wait for downloading to finish, then retry."
+          : ""),
+      );
       else compatible(state);
     }
   } else if (env.VITE_ENABLE_COLLAB !== "false") console.log(`Using external memorial backend: ${endpoint.origin}`);

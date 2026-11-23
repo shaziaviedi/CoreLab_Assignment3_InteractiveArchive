@@ -203,3 +203,22 @@ test("reading a paper note returns to the visitor's unchanged orbit after closin
   assert.ok(f.state.current.camera.position.distanceTo(position) < 1e-6);
   assert.ok(f.state.current.camera.quaternion.angleTo(rotation) < 1e-6);
 });
+
+test("hiding messages reaches the general tree camera and re-entering restores the saved orbit", async (t) => {
+  const f = await fixture(t);
+  await f.update({ mode: "tree", treeClose: true }); await f.frames();
+  f.pointer("pointerdown"); f.pointer("pointermove", { clientX: 340 }); f.pointer("pointerup", { clientX: 340 });
+  await f.frames();
+  const orbit = f.state.current.camera.position.clone();
+  await f.update({ treeFocus: { id: "note", anchorId: "tree-01" } }); await f.frames();
+  await f.update({ treeFocus: null, treeClose: false });
+  for (let frame = 0; frame < 120; frame++) {
+    await f.frames(1);
+    const p = f.state.current.camera.position;
+    assert.ok(Math.hypot(p.x + 3, p.z - 9.92) > 1.2);
+  }
+  assert.ok(f.state.current.camera.position.distanceTo(new THREE.Vector3(...CAMERA_PRESETS.tree.pos)) < 1e-6);
+  assert.equal(f.gesture.current.ready, true);
+  await f.update({ treeClose: true }); await f.frames();
+  assert.ok(f.state.current.camera.position.distanceTo(orbit) < 1e-6);
+});

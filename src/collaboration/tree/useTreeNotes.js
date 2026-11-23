@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { noteLength } from "./treeNoteLayout.js";
 import { placementFromId } from "../../../shared/fenceLayout.js";
 
-export default function useTreeNotes({ active, notes, createNote, status, autoCompose = false, arrived = true }) {
+export default function useTreeNotes({
+  active, notes, createNote, status, autoCompose = false, arrived = true, onViewChange,
+}) {
   const [stage, setStage] = useState("idle");
   const [draft, setDraft] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -10,13 +12,20 @@ export default function useTreeNotes({ active, notes, createNote, status, autoCo
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [uncertain, setUncertain] = useState(false);
+  const [info, setInfo] = useState(null);
   const request = useRef(null);
   const busy = useRef(false);
   const mounted = useRef(true);
   const previousStage = useRef("idle");
-  const [info, setInfo] = useState(null);
   const infoTimer = useRef(null);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearTimeout(infoTimer.current); }; }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimeout(infoTimer.current);
+    };
+  }, []);
   useEffect(() => {
     if (active && autoCompose) setStage("arriving");
     if (!active) {
@@ -30,20 +39,23 @@ export default function useTreeNotes({ active, notes, createNote, status, autoCo
     if (active && arrived && stage === "arriving") setStage("compose");
   }, [active, arrived, stage]);
   useEffect(() => { focusAnchor(null); }, [active, stage]);
+
   const cancel = useCallback(() => {
     if (busy.current) return;
+    if (selectedId) onViewChange?.(true);
     setStage((current) => current === "read" ? previousStage.current : "idle");
     setSelectedId(null);
     setInfo(null);
     setError("");
-  }, []);
+  }, [selectedId, onViewChange]);
   const begin = useCallback(() => {
     if (busy.current) return;
+    if (selectedId || stage === "hidden") onViewChange?.(true);
     setSelectedId(null);
     if (uncertain) { setStage("place"); return; }
     setError("");
-    setStage("compose");
-  }, [uncertain]);
+    setStage(stage !== "hidden" && arrived ? "compose" : "arriving");
+  }, [uncertain, arrived, stage, selectedId, onViewChange]);
   const place = useCallback(async (anchorId) => {
     if (busy.current || !active || stage !== "place") return;
     if (uncertain && request.current?.anchorId !== anchorId) return;
@@ -79,22 +91,72 @@ export default function useTreeNotes({ active, notes, createNote, status, autoCo
       if (mounted.current) setPending(false);
     }
   }, [active, stage, draft, createNote, uncertain]);
+  function showInfo(id, source = "hover") {
+    clearTimeout(infoTimer.current);
+    setInfo((current) => current?.id === id && current.source === source ? current : { id, source });
+  }
+
+  function hideInfo(id, source = "hover") {
+    clearTimeout(infoTimer.current);
+    infoTimer.current = setTimeout(() => {
+      setInfo((current) => current?.id === id && current.source === source ? null : current);
+    }, 160);
+  }
+
+  // Hiding the viewing controls never changes the shared notes.
+  function hideMessages() {
+    if (busy.current) return;
+    onViewChange?.(true);
+    clearTimeout(infoTimer.current);
+    setSelectedId(null);
+    setInfo(null);
+    focusAnchor(null);
+    setError("");
+    setStage("hidden");
+  }
+
+  function backToMessages() {
+    if (busy.current) return;
+    onViewChange?.(true);
+    setSelectedId(null);
+    setInfo(null);
+    setError("");
+    setStage("browse");
+  }
+
+  function viewMessages() {
+    if (busy.current) return;
+    if (stage === "hidden") onViewChange?.(true);
+    setSelectedId(null);
+    setInfo(null);
+    setStage("browse");
+  }
+
+  function read(id) {
+    if (busy.current) return;
+    if (id !== selectedId) onViewChange?.(true);
+    previousStage.current = stage === "read" ? previousStage.current : stage;
+    setSelectedId(id);
+    setStage("read");
+  }
+
+  function continueToPlacement() {
+    if (!draft.trim() || noteLength(draft) > 180) {
+      setError("Write 1–180 characters before choosing a position.");
+      return false;
+    }
+    setError("");
+    setStage("place");
+    return true;
+  }
+
   return {
-    info, showInfo: (id, source = "hover") => { clearTimeout(infoTimer.current); setInfo((current) => current?.id === id && current.source === source ? current : { id, source }); },
-    hideInfo: (id, source = "hover") => {
-      clearTimeout(infoTimer.current);
-      infoTimer.current = setTimeout(() => setInfo((current) => current?.id === id && current.source === source ? null : current), 160);
-    },
-    stage, draft, setDraft, focusedAnchorId, focusAnchor, pending, uncertain, error, status, begin, cancel, place,
+    stage, draft, setDraft, selected: notes.find((note) => note.id === selectedId),
+    info, showInfo, hideInfo, focusedAnchorId, focusAnchor,
+    pending, uncertain, error, status,
+    begin, cancel, place, continueToPlacement, hideMessages, backToMessages, viewMessages, read,
     retry: () => { if (request.current) place(request.current.anchorId); },
-    continueToPlacement: () => {
-      if (!draft.trim() || noteLength(draft) > 180) { setError("Write 1–180 characters before choosing a position."); return false; }
-      setError(""); setStage("place"); return true;
-    },
     edit: () => { if (!busy.current && !uncertain) setStage("compose"); },
-    viewMessages: () => { if (!busy.current) { setSelectedId(null); setStage("browse"); } },
-    read: (id) => { if (!busy.current) { previousStage.current = stage === "read" ? previousStage.current : stage; setSelectedId(id); setStage("read"); } },
-    selected: notes.find((note) => note.id === selectedId),
     modal: active && stage === "compose" && arrived,
   };
 }

@@ -26,6 +26,13 @@ compatible backend and reuses an already-running compatible server. It never kil
 an unrelated process. If an old backend occupies 3001, stop its terminal process
 and rerun the command. `PORT` and the local `VITE_SOCKET_URL` port must match.
 
+On macOS, cloud storage can offload files even inside `node_modules`. This can
+stall Node imports until the backend startup check times out without a server
+error. In Finder, choose **Keep Downloaded** for the project folder and wait for
+downloads to finish before retrying. Reinstalling dependencies alone is temporary
+if the folder remains eligible for offloading. Alternatively, keep the working
+project outside cloud-synced Desktop/Documents folders.
+
 `GET http://localhost:3001/health` returns `status`, `service`, and `layoutVersion`.
 Development watching checks actual source contents under `server`/`shared`, so
 file-provider hydration or dependency reads do not repeatedly restart the backend.
@@ -124,13 +131,16 @@ Observation actors retain shoulder clearance. **← RETURN TO MAP** uses the exi
 photography return styling. A pending request blocks duplicates; rejected or
 uncertain submissions preserve the draft and original retry identity.
 
-Hover a tag to see contributor/time metadata and a plain glowing **View Message**
-indicator projected beside that actual note. Clicking the note/indicator moves the
+Hover a tag to see contributor/time metadata and a single glowing magnifier cursor
+with **View Message** text following the pointer. Clicking the note moves the
 same camera rig close enough to read the full message on the physical paper.
 There is no separate visual message-details card. Keyboard focus/tap provide the
 same reading frame and metadata; screen readers receive the full original text.
-**BACK TO MESSAGES** restores the saved orbit. **HIDE MESSAGE** remains reversible
-and local to this browser/room; a neutral paper placeholder still reserves its spot.
+The close-up shows only **← BACK TO MESSAGES** and **HIDE MESSAGES**, after the
+camera arrives. Back restores the saved orbit and standard tree controls without
+opening the composer. Hide clears the local selection/hover and returns to the
+wider tree camera, preserving shared notes and any draft. **VIEW MESSAGES** reopens
+browsing from that camera. Navigation groups stay hidden during these transfers.
 
 Fence picking refreshes the active camera matrices and raycasts the current
 surface using the canvas's current client rectangle. Hover resumes on pointer

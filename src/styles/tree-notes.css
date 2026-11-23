@@ -38,13 +38,13 @@
 .tree-placement-guide p { margin: 0 0 12px; }
 .tree-placement-guide button + button { margin-left: 8px; }
 @media (max-height: 650px) { .tree-note-panel { padding: 16px; } .paper-note-preview { min-height: 80px; margin: 12px auto; padding: 18px; } }
-/* Discovery belongs only to the fence; notes keep their own pointer cursor. */
+/* One native magnifier and a pointer-following text label, without a second icon. */
 .three-stage canvas[data-tree-view] { cursor: var(--memorial-magnify) !important; }
-/* Projected note discovery reuses the map's plain glowing hint language. */
-.tree-view-hint { position: absolute; left: 0; top: 0; z-index: 48; display: flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #fff0cd; text-shadow: 0 1px 8px #25263f; font: inherit; font-size: 13px; letter-spacing: 0.06em; cursor: pointer; pointer-events: auto; white-space: nowrap; }
+.tree-view-hint { position: fixed; left: 0; top: 0; z-index: 48; padding: 0; border: 0; background: transparent; color: #fff0cd; text-shadow: 0 1px 8px #25263f; font: inherit; font-size: 13px; letter-spacing: 0.06em; pointer-events: none; white-space: nowrap; }
 .tree-view-hint[hidden] { display: none; }
-.tree-view-hint img { width: 27px; height: 27px; filter: drop-shadow(0 0 4px #fff0cd66); }
-.tree-reading-controls { position: absolute; z-index: 48; bottom: max(92px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 10px; white-space: nowrap; }
+.tree-reading-controls { position: absolute; z-index: 48; bottom: max(32px, calc(env(safe-area-inset-bottom) + 12px)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.tree-reading-controls .viewer-back { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; box-sizing: border-box; }
+@media (max-width: 420px) { .tree-reading-controls { gap: 8px; } .tree-reading-controls .viewer-back { padding: 10px 9px; font-size: 9px; letter-spacing: 0.07em; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes tree-composer-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .tree-note-panel { animation: tree-composer-enter 180ms ease-out; }

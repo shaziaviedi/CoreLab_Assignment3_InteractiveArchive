@@ -5,10 +5,15 @@ import { formatFlowerTime } from "../flowers/flowerProjection.js";
 
 // Projected counterparts of the actual tags, plus a coarse keyboard placement grid.
 export default function TreeNoteAccessibility({ notes, controls, active, targets, hiddenNoteIds, hint, tooltip }) {
-  const entries = useMemo(() => [
-    ...notes.map((note) => ({ anchor: noteAnchor(note), note })),
-    ...(controls.stage === "place" ? KEYBOARD_NOTE_ANCHORS.filter((anchor) => !notes.some((note) => notesOverlap(note, anchor))).map((anchor) => ({ anchor })) : []),
-  ].filter(({ anchor }) => anchor), [notes, controls.stage]);
+  const entries = useMemo(() => {
+    if (controls.stage === "read") return [];
+    const tags = notes.map((note) => ({ anchor: noteAnchor(note), note }));
+    if (controls.stage === "place") {
+      const available = KEYBOARD_NOTE_ANCHORS.filter((anchor) => !notes.some((note) => notesOverlap(note, anchor)));
+      tags.push(...available.map((anchor) => ({ anchor })));
+    }
+    return tags.filter(({ anchor }) => anchor);
+  }, [notes, controls.stage]);
   const indicated = controls.selected ?? notes.find((note) => note.id === controls.info?.id);
   if (!active) return null;
   return <div className="tree-note-access">
@@ -25,12 +30,8 @@ export default function TreeNoteAccessibility({ notes, controls, active, targets
         else if (!controls.uncertain && controls.status === "connected") controls.place(anchor.id);
       }}><span>{note ? "View Message" : "Attach message here"}</span></button>)}
     {indicated && <>
-      {controls.stage !== "read" && <button ref={hint} hidden className="tree-view-hint"
-        onPointerEnter={() => controls.showInfo(indicated.id, "hint")}
-        onPointerLeave={() => controls.hideInfo(indicated.id, "hint")}
-        onClick={() => controls.read(indicated.id)}>
-        <img src={`${import.meta.env?.BASE_URL ?? "/"}svg/magnify.svg`} alt="" /><span>View Message</span>
-      </button>}
+      {/* The canvas supplies the single native magnifier; only its label is HTML. */}
+      {controls.stage !== "read" && <span ref={hint} hidden className="tree-view-hint" aria-hidden="true">View Message</span>}
       <div ref={tooltip} id="note-contributor" className="flower-tooltip" role="tooltip" hidden>
         <div className="flower-tooltip-content"><span>Placed by: <b>{indicated.authorName}</b></span>
           <time dateTime={indicated.createdAt}>{formatFlowerTime(indicated.createdAt)}</time>

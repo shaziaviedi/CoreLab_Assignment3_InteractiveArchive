@@ -248,7 +248,7 @@ export default function MemorialCameraRig({
       const previous = previousView.current;
       transfer.current = {
         start: camera.position.clone(), look: look.current.clone(), elapsed: 0,
-        startFov: camera.fov, treeTransfer: previous?.mode === "tree" && mode === "tree" && treeOrbit,
+        startFov: camera.fov, treeTransfer: previous?.mode === "tree" && mode === "tree",
         poolFrom: previous?.mode === "pool" && mode === "pool" ? previous.step : null,
       };
       if (transfer.current.poolFrom !== null && poolLayout) {

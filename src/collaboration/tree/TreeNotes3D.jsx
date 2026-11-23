@@ -17,6 +17,7 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
   const point = useMemo(() => new Vector3(), []);
   const surface = useRef(null), installation = useRef(null);
   const picker = useMemo(createFencePicker, []);
+  const pointer = useRef(null);
   const indicated = controls.selected ?? notes.find((note) => note.id === controls.info?.id);
   const wires = useMemo(() => {
     const vertices = [], radius = INSTALLATION_RADIUS;
@@ -44,12 +45,16 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
     setHovered(null);
     delete gl.domElement.dataset.treeNote;
     delete gl.domElement.dataset.treeView;
+    pointer.current = null;
     if (controls.info) controls.hideInfo?.(controls.info.id, "hover");
   };
   useEffect(() => {
     clearHover();
     gl.domElement.style.setProperty("--memorial-magnify", `url("${import.meta.env?.BASE_URL ?? "/"}svg/magnify.svg") 18 18, pointer`);
-    return () => { delete gl.domElement.dataset.treeNote; delete gl.domElement.dataset.treeView; };
+    return () => {
+      delete gl.domElement.dataset.treeNote; delete gl.domElement.dataset.treeView;
+      if (hint?.current) hint.current.hidden = true;
+    };
   }, [enabled, controls.stage, gl]);
   useFrame((_, dt) => {
     if (preview && previewGroup.current) {
@@ -70,8 +75,9 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
       if (screen) tooltip.current.style.transform = `translate(${Math.max(115, Math.min(size.width - 115, screen.x))}px, ${Math.max(75, screen.y - 36)}px) translate(-50%, -100%)`;
     }
     if (hint?.current) {
-      hint.current.hidden = !screen || controls.stage === "read" || !gesture.current.ready;
-      if (screen) hint.current.style.transform = `translate(${Math.min(size.width - 145, screen.x + 32)}px, ${screen.y + 8}px)`;
+      const cursor = pointer.current;
+      hint.current.hidden = !screen || controls.stage === "read" || controls.info?.source !== "hover" || !cursor || !canHover(gesture.current);
+      if (cursor) hint.current.style.transform = `translate(${cursor.x + 24}px, ${cursor.y - 16}px)`;
     }
     if (!targets) return;
     camera.updateMatrixWorld();
@@ -105,7 +111,9 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
   function hoverNote(event, note) {
     if (!enabled || !canHover(gesture.current)) return;
     event.stopPropagation();
+    if (controls.stage === "read") return;
     setHovered(null);
+    pointer.current = event.pointerType === "touch" ? null : { x: event.clientX, y: event.clientY };
     controls.showInfo?.(note.id, "hover");
     gl.domElement.dataset.treeView = "true";
   }
