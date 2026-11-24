@@ -24,7 +24,7 @@ export default function MemorialNavigation({
         <div className="memorial-view-controls">
           <button className="viewer-back" onClick={onBack}>← RETURN TO MAP</button>
           {messagesHidden && <button className="viewer-back" onClick={onBrowse}>VIEW MESSAGES</button>}
-          {!messagesHidden && onCompose && (
+          {onCompose && (
             <button className="viewer-back" onClick={onCompose} disabled={composeDisabled}>LEAVE A MESSAGE</button>
           )}
         </div>

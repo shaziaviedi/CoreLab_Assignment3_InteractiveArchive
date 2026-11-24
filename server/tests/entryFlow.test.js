@@ -77,3 +77,28 @@ test("production socket URLs reject localhost, insecure protocols and non-origin
   for (const url of ["http://memorial.onrender.com", "https://localhost:3001", "https://127.0.0.1", "https://backend.example/socket.io", "https://user:password@backend.example"])
     assert.throws(() => validateSocketUrl(url, true));
 });
+
+test('presence card remains mounted while profile options hide in tree, pool and photography modes', async () => {
+  const previous = { window: globalThis.window, localStorage: globalThis.localStorage };
+  const saved = { visitorId: '5bccde1d-7284-4a7d-9f50-27cc986a8498', username: 'Presence QA', avatarType: 'female' };
+  globalThis.localStorage = {getItem:key=>key===IDENTITY_KEY?JSON.stringify(saved):null};
+  globalThis.window = {location:{search:'?room=presence-qa'},addEventListener(){},removeEventListener(){}};
+  let renderer;
+  const element = mode => React.createElement(CollaborationProvider, null,
+    React.createElement(CollaborationStatus, {mode,showProfile:mode==='main',Preview:Portrait}));
+  try {
+    await act(async () => { renderer=create(element('main')); });
+    const card=renderer.root.findByType('details');
+    assert.equal(renderer.root.findAllByProps({className:'visitor-edit button-circle'}).length,1);
+    for (const mode of ['tree','pool','photo','main']) {
+      await act(async () => renderer.update(element(mode)));
+      assert.equal(renderer.root.findByType('details'),card,'native expanded state survives camera transitions');
+      assert.equal(renderer.root.findAllByProps({className:'visitor-edit button-circle'}).length,mode==='main'?1:0);
+      assert.equal(renderer.root.findByType('summary').findAllByProps({role:'status'}).length,1);
+      assert.equal(JSON.parse(globalThis.localStorage.getItem(IDENTITY_KEY)).visitorId,saved.visitorId);
+    }
+  } finally {
+    if(renderer)await act(async()=>renderer.unmount());
+    Object.assign(globalThis,previous);
+  }
+});

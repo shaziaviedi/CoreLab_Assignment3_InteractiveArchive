@@ -9,12 +9,12 @@ import { io } from "socket.io-client";
 import * as THREE from "three";
 import { createMemorialServer } from "../app.js";
 import { readConfig } from "../config.js";
-import { loadPoolGeometry } from "./helpers/poolGeometry.js";
+import { loadPoolGeometry, loadGeometry } from "./helpers/poolGeometry.js";
 import { POOL_VIEW_SIDES, measurePoolLayout, poolCameraPosition, poolCameraTarget } from "../../src/scene/navigation.js";
 import { POOL_SIDES } from "../../shared/protocol.js";
 import useMemorialSocket from "../../src/collaboration/useMemorialSocket.js";
 import usePoolFlowers from "../../src/collaboration/flowers/usePoolFlowers.js";
-import PoolFlowers3D from "../../src/collaboration/flowers/PoolFlowers3D.jsx";
+import { PoolFlowerScene as PoolFlowers3D } from "../../src/collaboration/flowers/PoolFlowers3D.jsx";
 import { createRoseResources } from "../../src/collaboration/flowers/roseGeometry.js";
 import { projectFlower, formatFlowerTime } from "../../src/collaboration/flowers/flowerProjection.js";
 import { submitFlower } from "../../src/collaboration/flowers/flowerSubmission.js";
@@ -111,7 +111,7 @@ test("rose footprints follow the real parapet surface, away from corners, water 
       assert.ok(inset > 0.015 && inset < 0.14, `${anchor.id} must stay inside the reserved outer margin`);
     }
   }
-  const resources = createRoseResources();
+  const resources = createRoseResources(loadGeometry("../../../public/models/optimized/rose-3d.glb"));
   const bounds = new THREE.Box3();
   let triangles = 0;
   for (const geometry of Object.values(resources.geometries)) {
@@ -122,7 +122,7 @@ test("rose footprints follow the real parapet surface, away from corners, water 
   assert.ok(bounds.min.x >= -0.26 && bounds.max.x <= 0.24);
   assert.ok(bounds.min.z >= -0.08 && bounds.max.z <= 0.08);
   assert.ok(bounds.min.y >= 0 && bounds.max.y < 0.12);
-  assert.ok(triangles < 5000);
+  assert.ok(triangles === 19760);
   resources.dispose();
 });
 
@@ -192,7 +192,7 @@ test("3D flower targets preview free positions, suppress drags and expose touch 
     return null;
   }
   let props = { layout, side: "north", flowers, controls, enabled: true, infoEnabled: true, gesture, targets, tooltip, Rose };
-  const scene = () => React.createElement(React.Fragment, null, React.createElement(Aim), React.createElement(PoolFlowers3D, props));
+  const scene = () => React.createElement(React.Fragment, null, React.createElement(Aim), React.createElement(PoolFlowers3D, { ...props, resources: createRoseResources(loadGeometry("../../../public/models/optimized/rose-3d.glb")) }));
   const renderer = await create(scene(), {
     camera: { position: poolCameraPosition(layout, 0).toArray(), fov: 50 },
     width: 1280, height: 800,

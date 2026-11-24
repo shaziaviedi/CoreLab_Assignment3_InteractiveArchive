@@ -489,7 +489,7 @@ export default React.memo(function Experience({ preview = false, interactionBloc
               <Icon name="reset" />
             </button>
         </>}
-        {!preview && identity && mode === "main" && !archiveOpen && <CollaborationStatus onEdit={onEditProfile} />}
+        {!preview && identity && !archiveOpen && <CollaborationStatus onEdit={onEditProfile} showProfile={mode === "main"} mode={mode} />}
       </div>
       {interactionZone && !cameraZone && !archiveOpen && (
         <MemorialNavigation

@@ -16,7 +16,6 @@ export default function useTreeNotes({
   const request = useRef(null);
   const busy = useRef(false);
   const mounted = useRef(true);
-  const previousStage = useRef("idle");
   const infoTimer = useRef(null);
 
   useEffect(() => {
@@ -43,7 +42,7 @@ export default function useTreeNotes({
   const cancel = useCallback(() => {
     if (busy.current) return;
     if (selectedId) onViewChange?.(true);
-    setStage((current) => current === "read" ? previousStage.current : "idle");
+    setStage((current) => current === "read" ? "browse" : "idle");
     setSelectedId(null);
     setInfo(null);
     setError("");
@@ -103,18 +102,6 @@ export default function useTreeNotes({
     }, 160);
   }
 
-  // Hiding the viewing controls never changes the shared notes.
-  function hideMessages() {
-    if (busy.current) return;
-    onViewChange?.(true);
-    clearTimeout(infoTimer.current);
-    setSelectedId(null);
-    setInfo(null);
-    focusAnchor(null);
-    setError("");
-    setStage("hidden");
-  }
-
   function backToMessages() {
     if (busy.current) return;
     onViewChange?.(true);
@@ -135,7 +122,6 @@ export default function useTreeNotes({
   function read(id) {
     if (busy.current) return;
     if (id !== selectedId) onViewChange?.(true);
-    previousStage.current = stage === "read" ? previousStage.current : stage;
     setSelectedId(id);
     setStage("read");
   }
@@ -154,7 +140,7 @@ export default function useTreeNotes({
     stage, draft, setDraft, selected: notes.find((note) => note.id === selectedId),
     info, showInfo, hideInfo, focusedAnchorId, focusAnchor,
     pending, uncertain, error, status,
-    begin, cancel, place, continueToPlacement, hideMessages, backToMessages, viewMessages, read,
+    begin, cancel, place, continueToPlacement, backToMessages, viewMessages, read,
     retry: () => { if (request.current) place(request.current.anchorId); },
     edit: () => { if (!busy.current && !uncertain) setStage("compose"); },
     modal: active && stage === "compose" && arrived,

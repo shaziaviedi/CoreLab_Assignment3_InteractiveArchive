@@ -5,16 +5,22 @@ import { createRoseResources } from "./roseGeometry.js";
 import { projectFlower } from "./flowerProjection.js";
 import WhiteRose from "./WhiteRose.jsx";
 import { roseRestingTransform } from "./roseAppearance.js";
+import { useModel } from "../../scene/assets.js";
 
-export default function PoolFlowers3D({ layout, side, flowers, controls, enabled, infoEnabled,
-  gesture, targets, tooltip, Rose = WhiteRose }) {
+export default function PoolFlowers3D(props) {
+  const model = useModel("rose-3d");
+  const resources = useMemo(() => createRoseResources(model.scene), [model]);
+  useEffect(() => () => resources.dispose(), [resources]);
+  return <PoolFlowerScene {...props} resources={resources} />;
+}
+
+export function PoolFlowerScene({ layout, side, flowers, controls, enabled, infoEnabled,
+  gesture, targets, tooltip, resources, Rose = WhiteRose }) {
   const { gl, camera, size } = useThree();
-  const resources = useMemo(createRoseResources, []);
   const pointerType = useRef("mouse");
   const occupied = useMemo(() => new Map(flowers.map((flower) => [flower.anchorId, flower])), [flowers]);
   const anchors = useMemo(() => new Map(layout?.anchors.map((anchor) => [anchor.id,
     occupied.has(anchor.id) ? roseRestingTransform(anchor, occupied.get(anchor.id)) : anchor]) ?? []), [layout, occupied]);
-  useEffect(() => () => resources.dispose(), [resources]);
   useEffect(() => {
     controls.clearPreview();
     delete gl.domElement.dataset.flower;

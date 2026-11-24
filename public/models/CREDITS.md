@@ -68,3 +68,13 @@ Sun: procedural pastel-yellow disc and soft halo; uploaded sun assets removed.
 
 User-supplied characters, with walking/idle clips crossfaded on cloned rigs.
 Original uploads remain unchanged; license details were not supplied.
+
+## Uploaded Rose 3D
+
+“Rose 3D” by Julialovehearts, [source](https://sketchfab.com/3d-models/rose-3d-4aad2c8cd1564bc49fddb00df80d5776), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Original upload: `rose_3d.glb`. Runtime derivative: `optimized/rose-3d.glb`.
+Changes: uniform scale and resting orientation; split original triangles into petal,
+leaf and stem primitives; neutralized red petal texels for selectable color tints;
+converted legacy gloss texture to roughness for current Three.js PBR support.
+All 19,760 original triangles and texture UVs retained. Regenerate with
+`node scripts/prepare-rose.mjs`.

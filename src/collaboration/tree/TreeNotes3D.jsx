@@ -10,7 +10,7 @@ import {
   TREE_NOTE_ANCHORS, KEYBOARD_NOTE_ANCHORS, noteAnchor, anchorFacesCamera,
 } from "./treeNoteLayout.js";
 import PaperTag from "./PaperTag.jsx";
-import { createFencePicker, projectNote } from "./treeInteraction.js";
+import { createFencePicker, projectNote, projectNoteBounds, noteMetadataPosition } from "./treeInteraction.js";
 
 export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenNoteIds, targets, hint, tooltip, pickPlacement, Tag = PaperTag }) {
   const { gl, camera, size } = useThree();
@@ -72,7 +72,14 @@ export default function TreeNotes3D({ notes, controls, enabled, gesture, hiddenN
     const screen = indicated && enabled ? projectNote(indicated, camera, size.width, size.height) : null;
     if (tooltip?.current) {
       tooltip.current.hidden = !screen;
-      if (screen) tooltip.current.style.transform = `translate(${Math.max(115, Math.min(size.width - 115, screen.x))}px, ${Math.max(75, screen.y - 36)}px) translate(-50%, -100%)`;
+      if (screen && controls.stage === "read") {
+        const bounds = projectNoteBounds(indicated, camera, size.width, size.height);
+        if (bounds) {
+          const { x, y } = noteMetadataPosition(bounds, size.width, size.height,
+            tooltip.current.offsetWidth || 220, tooltip.current.offsetHeight || 64);
+          tooltip.current.style.transform = `translate(${x}px, ${y}px)`;
+        }
+      } else if (screen) tooltip.current.style.transform = `translate(${Math.max(115, Math.min(size.width - 115, screen.x))}px, ${Math.max(75, screen.y - 36)}px) translate(-50%, -100%)`;
     }
     if (hint?.current) {
       const cursor = pointer.current;

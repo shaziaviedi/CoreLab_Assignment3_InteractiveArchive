@@ -4,14 +4,14 @@ import RoomShare from "./RoomShare.jsx";
 import VisitorPresence from "./VisitorPresence.jsx";
 const AvatarPreview = lazy(() => import("./AvatarPreview.jsx"));
 
-export default function CollaborationStatus({ onEdit, Preview = AvatarPreview }) {
+export default function CollaborationStatus({ onEdit, Preview = AvatarPreview, showProfile = true, mode = "main" }) {
   const { identity, status, visitors, error, storageWarning, reconnect, roomId } = useCollaboration();
   if (!identity) return null;
   return (
-    <aside className="collaboration-status" aria-label="Memorial connection">
-      <button className="visitor-edit button-circle" onClick={onEdit} aria-label={`Edit visitor profile: ${identity.username}`}>
+    <aside className={`collaboration-status presence-mode-${mode}`} aria-label="Memorial connection">
+      {showProfile && <button className="visitor-edit button-circle" onClick={onEdit} aria-label={`Edit visitor profile: ${identity.username}`}>
         <Suspense fallback={null}><Preview avatarType={identity.avatarType} /></Suspense>
-      </button>
+      </button>}
       <details>
         <summary>
           <span className={`connection-dot ${status}`} aria-hidden="true" />

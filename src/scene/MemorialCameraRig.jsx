@@ -20,7 +20,7 @@ export default function MemorialCameraRig({
   cameraZone, mode, treeClose = false, treeFocus = null, poolLayout, poolStep, interactive, viewReset,
   gesture, onTransitionChange,
 }) {
-  const { camera, gl, scene, events } = useThree();
+  const { camera, gl, scene, events, size } = useThree();
   const lastRaycast = useRef({ position: new THREE.Vector3(), rotation: new THREE.Quaternion(), fov: 0 });
   const reduced = useReducedMotion();
   const treeAngle = useRef(0);
@@ -237,7 +237,7 @@ export default function MemorialCameraRig({
       treeCameraPosition(displayedAngle.current, goal, treeRadius.current);
       clearTreeOrbit(goal, obstacles.current);
       // The orbit refs remain intact while reading; closing restores that view.
-      if (treeFocus) noteReadingFrame(treeFocus, goal, aim, camera.aspect);
+      if (treeFocus) noteReadingFrame(treeFocus, goal, aim, camera.aspect, size.height);
     } else if (mode === "pool" && poolLayout) {
       poolCameraTarget(poolLayout, poolStep, aim);
       poolCameraPosition(poolLayout, poolStep, goal);

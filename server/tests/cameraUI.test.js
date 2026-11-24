@@ -73,7 +73,7 @@ test("composer waits for arrival; SUBMIT only advances a retained local draft", 
 test("note reading uses a close 3D frame without a separate message card", () => {
   const note = { id: "read", anchorId: "tree-01", text: "Words on the paper", authorName: "A", createdAt: new Date().toISOString() };
   const frame = noteReadingFrame(note);
-  assert.ok(frame.position.distanceTo(frame.target) > 0.39 && frame.position.distanceTo(frame.target) < 0.42);
+  assert.ok(frame.position.distanceTo(frame.target) > 0.6 && frame.position.distanceTo(frame.target) < 0.8);
   const html = renderToStaticMarkup(React.createElement(TreeNotePanel, { active: true, controls: { stage: "read", selected: note }, moderation: { hiddenNoteIds: new Set() } }));
   assert.doesNotMatch(html, /role="dialog"|paper-note-preview|tree-note-author/);
   assert.match(html, /BACK TO MESSAGES/);

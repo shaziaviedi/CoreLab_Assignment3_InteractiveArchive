@@ -21,7 +21,7 @@ export default function VisitorPresence({ Preview = AvatarPortrait }) {
             <Suspense fallback={null}><Preview avatarType={visitor.avatarType} /></Suspense>
           </span>
           <span>{visitor.username}{visitor.visitorId === identity?.visitorId ? " (you)" : ""}</span>
-          <small>{ACTIVITY_LABELS[visitorActivity(visitor, now)] || ZONE_LABELS[visitor.currentZone]}</small>
+          <small>{ZONE_LABELS[visitor.currentZone]}{visitorActivity(visitor, now) !== "idle" && <span className="visitor-activity">{ACTIVITY_LABELS[visitorActivity(visitor, now)]}</span>}</small>
         </li>
       ))}
     </ul>

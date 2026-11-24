@@ -6,7 +6,7 @@ import { formatFlowerTime } from "../flowers/flowerProjection.js";
 // Projected counterparts of the actual tags, plus a coarse keyboard placement grid.
 export default function TreeNoteAccessibility({ notes, controls, active, targets, hiddenNoteIds, hint, tooltip }) {
   const entries = useMemo(() => {
-    if (controls.stage === "read") return [];
+    if (["read", "hidden"].includes(controls.stage)) return [];
     const tags = notes.map((note) => ({ anchor: noteAnchor(note), note }));
     if (controls.stage === "place") {
       const available = KEYBOARD_NOTE_ANCHORS.filter((anchor) => !notes.some((note) => notesOverlap(note, anchor)));

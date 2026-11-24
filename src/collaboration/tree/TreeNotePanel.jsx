@@ -26,7 +26,13 @@ export default function TreeNotePanel({ controls, active, moderation }) {
       {/* Equivalent full-text access for screen readers; the visual reader is 3D. */}
       <p className="visually-hidden" aria-live="polite">{hidden ? "Message hidden on this browser." : selected?.text}</p>
       <button className="viewer-back" onClick={controls.backToMessages}>← BACK TO MESSAGES</button>
-      <button className="viewer-back" onClick={controls.hideMessages}>HIDE MESSAGES</button>
+      <button className="viewer-back" disabled={!selected || !moderation}
+        onClick={() => {
+          if (!selected || !moderation) return;
+          if (hidden) moderation.showNote(selected.id);
+          else moderation.hideNote(selected.id);
+        }}>{hidden ? "SHOW MESSAGE" : "HIDE MESSAGE"}</button>
+      {moderation?.warning && <p className="visually-hidden" role="status">{moderation.warning}</p>}
     </div>;
   }
   if (stage === "browse") return null;

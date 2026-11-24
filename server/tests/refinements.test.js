@@ -135,7 +135,7 @@ test("rose color changes preview state and lost acknowledgements retry the origi
 });
 
 test("deterministic rose variants share geometry and stay in contact with the real parapet", () => {
-  const pool = loadPoolGeometry(), layout = measurePoolLayout(pool), resources = createRoseResources();
+  const pool = loadPoolGeometry(), layout = measurePoolLayout(pool), resources = createRoseResources(loadGeometry("../../../public/models/optimized/rose-3d.glb"));
   const surfaces = []; pool.traverse((node) => { if (node.name === "pool-part-18") surfaces.push(node); });
   const ray = new THREE.Raycaster();
   const transforms = new Set();

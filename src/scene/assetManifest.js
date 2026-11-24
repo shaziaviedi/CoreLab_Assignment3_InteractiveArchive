@@ -3,6 +3,7 @@ export const ESSENTIAL_MODELS = Object.freeze([
   "reference-pool", "reference-museum", "survivor-sakura", "jabami-bush",
   "jabami-tree-v1", "jabami-tree-v4", "oculus", "city-lowpoly", "city-newyork",
   "one-world-trade-center",
+  "rose-3d",
 ]);
 export const VISITOR_MODELS = Object.freeze(["male-idle", "female-idle", "male-walk", "female-walk"]);
 export const PUBLIC_ASSETS = Object.freeze([
